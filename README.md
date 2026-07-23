@@ -1,1 +1,1 @@
-# raccoon-rdp-proxy
+# Raccoon.RdpProxy
