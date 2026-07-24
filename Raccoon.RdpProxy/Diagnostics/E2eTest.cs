@@ -111,7 +111,7 @@ internal static class E2eTest
 
         await ns.WriteAsync(RdpNegotiation.BuildConnectionConfirm(RdpConstants.ProtocolSsl, 0)).ConfigureAwait(false);
 
-        using var ssl = new SslStream(ns, false);
+        await using var ssl = new SslStream(ns, false);
         await ssl.AuthenticateAsServerAsync(new SslServerAuthenticationOptions
         {
             ServerCertificate = cert,

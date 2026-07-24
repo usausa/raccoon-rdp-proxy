@@ -56,7 +56,7 @@ internal static class SelfTestRunner
         Assert(now == "10.13.8.100", $"new address not applied: {now}");
 
         var tpktLen = (outp![2] << 8) | outp[3];
-        Assert(tpktLen == outp!.Length, $"TPKT length mismatch {tpktLen} != {outp.Length}");
+        Assert(tpktLen == outp.Length, $"TPKT length mismatch {tpktLen} != {outp.Length}");
     }
 
     private static void TestServerSelectedProtocol()
@@ -266,6 +266,7 @@ internal static class SelfTestRunner
 
     internal static byte[] BuildClientInfoPduForTest(string clientAddress) => BuildClientInfoPdu(clientAddress, BuildTail());
 
+    // ReSharper disable once ParameterTypeCanBeEnumerable.Local
     private static byte[] BuildClientInfoPdu(string clientAddress, byte[] tail)
     {
         var domain = Encoding.Unicode.GetBytes("WORKGROUP");

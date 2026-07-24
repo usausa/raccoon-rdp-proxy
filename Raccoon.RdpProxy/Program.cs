@@ -37,8 +37,6 @@ if (args.Length > 0)
             return MakeCert(args[1]);
         case "--credssp-probe" when args.Length >= 2:
             return await CredSspProbe.RunAsync(args).ConfigureAwait(false);
-        default:
-            break;
     }
 }
 

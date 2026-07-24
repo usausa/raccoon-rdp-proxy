@@ -64,7 +64,7 @@ internal static class CredSspProbe
             return 3;
         }
 
-        using var tls = new SslStream(ns, false, static (_, _, _, _) => true);
+        await using var tls = new SslStream(ns, false, static (_, _, _, _) => true);
         await tls.AuthenticateAsClientAsync(new SslClientAuthenticationOptions
         {
             TargetHost = host,

@@ -226,8 +226,8 @@ internal sealed class RdpProxyService : BackgroundService
 
                 await cs.WriteAsync(RdpNegotiation.BuildConnectionConfirm(RdpConstants.ProtocolSsl, 0), ct).ConfigureAwait(false);
 
-                using var sslClient = new SslStream(cs, leaveInnerStreamOpen: false);
-                using var sslBackend = new SslStream(bs, leaveInnerStreamOpen: false, userCertificateValidationCallback: static (_, _, _, _) => true);
+                await using var sslClient = new SslStream(cs, leaveInnerStreamOpen: false);
+                await using var sslBackend = new SslStream(bs, leaveInnerStreamOpen: false, userCertificateValidationCallback: static (_, _, _, _) => true);
                 var serverOpts = new SslServerAuthenticationOptions
                 {
                     ServerCertificate = cert,
