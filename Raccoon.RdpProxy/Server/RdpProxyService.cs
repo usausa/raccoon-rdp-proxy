@@ -304,13 +304,13 @@ internal sealed class RdpProxyService : BackgroundService
         CancellationToken ct)
     {
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        var c2b = PumpClientToBackendAsync(peer, client, backend, clientAddress, clientName, maskClientInfo, backendSelected, linked.Token);
-        var b2c = PumpBackendToClientAsync(peer, backend, client, clientRequested, backendRequested, linked.Token);
-        await Task.WhenAny(c2b, b2c).ConfigureAwait(false);
+        var ctob = PumpClientToBackendAsync(peer, client, backend, clientAddress, clientName, maskClientInfo, backendSelected, linked.Token);
+        var btoc = PumpBackendToClientAsync(peer, backend, client, clientRequested, backendRequested, linked.Token);
+        await Task.WhenAny(ctob, btoc).ConfigureAwait(false);
         await linked.CancelAsync().ConfigureAwait(false);
         try
         {
-            await Task.WhenAll(c2b, b2c).ConfigureAwait(false);
+            await Task.WhenAll(ctob, btoc).ConfigureAwait(false);
         }
         catch (Exception e) when (IsExpectedConnectionError(e) || (e is OperationCanceledException))
         {

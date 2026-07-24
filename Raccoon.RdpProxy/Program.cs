@@ -32,7 +32,7 @@ if (args.Length > 0)
         case "--selftest":
             return SelfTestRunner.RunAll();
         case "--e2etest":
-            return await E2eTest.RunAsync().ConfigureAwait(false);
+            return await E2ETest.RunAsync().ConfigureAwait(false);
         case "--make-cert" when args.Length >= 2:
             return MakeCert(args[1]);
         case "--credssp-probe" when args.Length >= 2:

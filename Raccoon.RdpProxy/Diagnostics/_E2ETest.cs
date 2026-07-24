@@ -16,7 +16,7 @@ using Raccoon.RdpProxy.Settings;
 // バックエンドが受け取った Client Info PDU の clientAddress が書き換わっているか確認する。
 // Drives fake client -> proxy (real service) -> fake backend, and verifies that the clientAddress
 // in the Client Info PDU received by the backend has been rewritten.
-internal static class E2eTest
+internal static class E2ETest
 {
     public static async Task<int> RunAsync()
     {
