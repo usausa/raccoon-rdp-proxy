@@ -45,7 +45,7 @@ internal sealed class NtlmClientAuth : ICredSspAuth
                     NtlmFlags.Sign | NtlmFlags.Seal | NtlmFlags.KeyExchange |
                     NtlmFlags.Negotiate128 | NtlmFlags.Negotiate56 | NtlmFlags.Version;
         var m = new byte[40];
-        Encoding.ASCII.GetBytes("NTLMSSP\0").CopyTo(m, 0);
+        "NTLMSSP\0"u8.ToArray().CopyTo(m, 0);
         BinaryPrimitives.WriteUInt32LittleEndian(m.AsSpan(8), 1); // MessageType = 1
         BinaryPrimitives.WriteUInt32LittleEndian(m.AsSpan(12), (uint)flags);
 
@@ -304,7 +304,7 @@ internal sealed class NtlmClientAuth : ICredSspAuth
     {
         var c = new Challenge
         {
-            Flags = (NtlmFlags)BinaryPrimitives.ReadUInt32LittleEndian(msg.AsSpan(20)),
+            Flags = (NtlmFlags)BinaryPrimitives.ReadUInt32LittleEndian(msg.AsSpan(20))
         };
         msg.AsSpan(24, 8).CopyTo(c.ServerChallenge);
 
@@ -354,7 +354,7 @@ internal sealed class NtlmClientAuth : ICredSspAuth
         off += encryptedRandomSessionKey.Length;
 
         var m = new byte[off];
-        Encoding.ASCII.GetBytes("NTLMSSP\0").CopyTo(m, 0);
+        "NTLMSSP\0"u8.ToArray().CopyTo(m, 0);
         BinaryPrimitives.WriteUInt32LittleEndian(m.AsSpan(8), 3); // MessageType
 
         Field(12, lmResponse, lmOff);

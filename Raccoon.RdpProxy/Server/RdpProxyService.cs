@@ -232,12 +232,12 @@ internal sealed class RdpProxyService : BackgroundService
                 {
                     ServerCertificate = cert,
                     ClientCertificateRequired = false,
-                    EnabledSslProtocols = SslProtocols.None,
+                    EnabledSslProtocols = SslProtocols.None
                 };
                 var clientOpts = new SslClientAuthenticationOptions
                 {
                     TargetHost = map.Host,
-                    EnabledSslProtocols = SslProtocols.None,
+                    EnabledSslProtocols = SslProtocols.None
                 };
                 await Task.WhenAll(
                     sslClient.AuthenticateAsServerAsync(serverOpts, ct),

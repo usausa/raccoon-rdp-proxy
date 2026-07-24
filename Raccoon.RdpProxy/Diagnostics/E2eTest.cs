@@ -42,7 +42,7 @@ internal static class E2eTest
             Listen = "127.0.0.1",
             ClientAddress = writeAddr,
             Source = null,
-            Maps = [new MapSetting { ListenPort = proxyPort, Host = "127.0.0.1", Port = backendPort }],
+            Maps = [new MapSetting { ListenPort = proxyPort, Host = "127.0.0.1", Port = backendPort }]
         };
 
         using var service = new RdpProxyService(Options.Create(setting), NullLogger<RdpProxyService>.Instance);
@@ -115,7 +115,7 @@ internal static class E2eTest
         await ssl.AuthenticateAsServerAsync(new SslServerAuthenticationOptions
         {
             ServerCertificate = cert,
-            EnabledSslProtocols = SslProtocols.None,
+            EnabledSslProtocols = SslProtocols.None
         }).ConfigureAwait(false);
 
         var info = await StreamHelper.ReadTpktAsync(ssl, default).ConfigureAwait(false);
@@ -130,7 +130,8 @@ internal static class E2eTest
 
     private static async Task FakeClientAsync(int proxyPort, string clientAddr)
     {
-        using var c = new TcpClient { NoDelay = true };
+        using var c = new TcpClient();
+        c.NoDelay = true;
         await c.ConnectAsync(IPAddress.Loopback, proxyPort).ConfigureAwait(false);
         var ns = c.GetStream();
 
@@ -141,11 +142,11 @@ internal static class E2eTest
             throw new IOException("no CC received");
         }
 
-        using var ssl = new SslStream(ns, false, static (_, _, _, _) => true);
+        await using var ssl = new SslStream(ns, false, static (_, _, _, _) => true);
         await ssl.AuthenticateAsClientAsync(new SslClientAuthenticationOptions
         {
             TargetHost = "rdp-proxy",
-            EnabledSslProtocols = SslProtocols.None,
+            EnabledSslProtocols = SslProtocols.None
         }).ConfigureAwait(false);
 
         var pdu = SelfTestRunner.BuildClientInfoPduForTest(clientAddr);

@@ -35,6 +35,6 @@ internal sealed class RdpNegFailureException : Exception
         0x00000005 => "HYBRID_REQUIRED_BY_SERVER: server requires NLA (CredSSP). " +
                       "Disable the NLA requirement on the target, or use the credential-bridge mode.",
         0x00000006 => "SSL_WITH_USER_AUTH_REQUIRED_BY_SERVER",
-        _ => $"RDP Negotiation Failure code=0x{code:X8}",
+        _ => $"RDP Negotiation Failure code=0x{code:X8}"
     };
 }

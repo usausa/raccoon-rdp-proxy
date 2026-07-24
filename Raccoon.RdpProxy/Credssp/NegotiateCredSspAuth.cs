@@ -16,7 +16,7 @@ internal sealed class NegotiateCredSspAuth : ICredSspAuth, IDisposable
             Package = "NTLM", // IP 接続なので NTLM を明示(Kerberos は SPN 解決が要る)
             Credential = new NetworkCredential(user, password, domain),
             TargetName = spn,
-            RequiredProtectionLevel = ProtectionLevel.EncryptAndSign,
+            RequiredProtectionLevel = ProtectionLevel.EncryptAndSign
         });
     }
 

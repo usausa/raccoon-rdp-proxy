@@ -16,5 +16,5 @@ internal enum NtlmFlags : uint
     Version = 0x02000000,
     Negotiate128 = 0x20000000,
     KeyExchange = 0x40000000,
-    Negotiate56 = 0x80000000,
+    Negotiate56 = 0x80000000
 }

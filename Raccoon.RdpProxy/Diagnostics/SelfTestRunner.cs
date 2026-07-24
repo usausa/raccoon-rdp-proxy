@@ -55,8 +55,8 @@ internal static class SelfTestRunner
         ClientInfoRewriter.TryRewrite(outp!, "X", false, out var now);
         Assert(now == "10.13.8.100", $"new address not applied: {now}");
 
-        var tpktLen = (outp![2] << 8) | outp![3];
-        Assert(tpktLen == outp!.Length, $"TPKT length mismatch {tpktLen} != {outp!.Length}");
+        var tpktLen = (outp![2] << 8) | outp[3];
+        Assert(tpktLen == outp!.Length, $"TPKT length mismatch {tpktLen} != {outp.Length}");
     }
 
     private static void TestServerSelectedProtocol()
@@ -204,7 +204,7 @@ internal static class SelfTestRunner
         var esk = Convert.FromHexString("55555555555555555555555555555555");
         var a = new NtlmClientAuth("D", "U", "P");
         a.DeriveSessionSecurity(esk);
-        var msg = Encoding.ASCII.GetBytes("hello-credssp");
+        var msg = "hello-credssp"u8.ToArray();
         var token = a.Seal(msg);
         var srvSeal = new Rc4(NtlmClientAuth.SealKey(esk, "client-to-server"));
         var dec = new byte[token.Length - 16];
@@ -214,7 +214,7 @@ internal static class SelfTestRunner
 
     private static void TestCredSspDer()
     {
-        var token = Encoding.ASCII.GetBytes("NTLMSSP\0test-token");
+        var token = "NTLMSSP\0test-token"u8.ToArray();
         var back = CredSspClient.ExtractNegoToken(CredSspClient.BuildTsRequest(negoToken: token));
         Assert((back is not null) && back.AsSpan().SequenceEqual(token), "TSRequest negoToken round-trip failed");
 

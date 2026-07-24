@@ -5,6 +5,7 @@ using Raccoon.RdpProxy.Helpers;
 // 最小限の DER エンコード/デコード (CredSSP TSRequest 用)。
 internal static class Der
 {
+    // ReSharper disable IntVariableOverflowInUncheckedContext
     public static byte[] Length(int n)
     {
         if (n < 0x80)
@@ -24,6 +25,7 @@ internal static class Der
 
         return [0x83, (byte)(n >> 16), (byte)(n >> 8), (byte)n];
     }
+    // ReSharper restore IntVariableOverflowInUncheckedContext
 
     public static byte[] Tlv(byte tag, ReadOnlySpan<byte> content)
     {

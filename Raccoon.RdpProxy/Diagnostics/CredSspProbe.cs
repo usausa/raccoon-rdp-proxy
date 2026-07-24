@@ -22,11 +22,12 @@ internal static class CredSspProbe
 
         var colon = spec.LastIndexOf(':');
         var host = colon > 0 ? spec[..colon] : spec;
-        var port = colon > 0 ? int.Parse(spec[(colon + 1)..], System.Globalization.CultureInfo.InvariantCulture) : 3389;
+        var port = colon > 0 ? int.Parse(spec[(colon + 1)..], CultureInfo.InvariantCulture) : 3389;
 
         Console.WriteLine($"CredSSP probe -> {host}:{port}  user={domain}\\{user}  impl={impl}");
 
-        using var tcp = new TcpClient { NoDelay = true };
+        using var tcp = new TcpClient();
+        tcp.NoDelay = true;
         try
         {
             await tcp.ConnectAsync(host, port).WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
@@ -67,7 +68,7 @@ internal static class CredSspProbe
         await tls.AuthenticateAsClientAsync(new SslClientAuthenticationOptions
         {
             TargetHost = host,
-            EnabledSslProtocols = SslProtocols.None,
+            EnabledSslProtocols = SslProtocols.None
         }).ConfigureAwait(false);
 
         if (tls.RemoteCertificate is not X509Certificate2 sc)
