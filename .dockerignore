@@ -1,0 +1,10 @@
+# ビルドコンテキストから除外(ビルド成果物・秘密情報・不要物)
+publish/
+**/bin/
+**/obj/
+*.pfx
+*.cer
+.git/
+.vs/
+__*
+desktop.ini

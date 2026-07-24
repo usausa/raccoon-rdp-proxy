@@ -1,0 +1,14 @@
+services:
+  raccoon-rdpproxy:
+    build: .
+    image: raccoon-rdpproxy:latest
+    container_name: raccoon-rdpproxy
+    # デュアルホーム(192.168.100.x / 192.168.50.x)と source bind のため host ネットワーク必須。
+    # host ネットワークなので受付ポート(33031 等)はホスト上に直接開く(ports 指定は不要)。
+    network_mode: host
+    restart: unless-stopped
+    volumes:
+      # appsettings.json(Proxy:Maps・資格情報・ログ設定) と proxy.pfx を置く。WORKDIR=/cfg で解決。
+      - /opt/raccoon-rdpproxy:/cfg
+    # 資格情報を含むため /opt/raccoon-rdpproxy/appsettings.json は chmod 600 推奨。
+    # ログ量は appsettings.json の Serilog:MinimumLevel で調整(既定 Information=静か / Debug=詳細)。

@@ -1,0 +1,44 @@
+[Unit]
+Description=Raccoon RDP Proxy (clientAddress rewrite / CredSSP bridge)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# AddSystemd() により sd_notify(READY=1) を送るので Type=notify。
+Type=notify
+# 1インスタンスで複数ターゲットを捌ける。appsettings.json の Proxy:Maps に複数 map・資格情報を記載。
+# 設定(appsettings.json)/証明書(proxy.pfx)/ログ(Log/) はこの WorkingDirectory から解決される。
+WorkingDirectory=/opt/raccoon-rdpproxy
+ExecStart=/opt/raccoon-rdpproxy/Raccoon.RdpProxy
+Restart=on-failure
+RestartSec=3
+
+# ── サービス安定化のための設定 ──
+# FD 上限(サービス既定はターミナルより低いことがある。ソケット枯渇での切断を防ぐ)
+LimitNOFILE=65536
+# 単一ファイル(自己完結)の展開先を固定。PrivateTmp/毎起動の再展開/tmp掃除の影響を回避。
+#   ※ NativeAOT(build-aot.sh)版を使う場合は展開が無いのでこの行は不要。
+Environment=DOTNET_BUNDLE_EXTRACT_BASE_DIR=/opt/raccoon-rdpproxy/.bundle
+# .NET のメモリを控えめに(ワークステーションGC)。既定でも可。
+Environment=DOTNET_gcServer=0
+
+# ログ量は appsettings.json の Serilog:MinimumLevel で調整(既定 Information=静か)。
+# 接続/CredSSP/書き換えの各ステップまで見たいときは Debug にする。
+# 待受は高ポートなので root 不要。source(例 192.168.50.254) を bind できるホストで実行すること。
+# User=rdpproxy
+# 資格情報を含むため権限を絞る: chmod 600 /opt/raccoon-rdpproxy/appsettings.json
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/raccoon-rdpproxy
+ProtectHome=true
+PrivateTmp=true
+
+# ── SELinux について ──
+# 単一ファイル版は起動時に展開したネイティブライブラリを実行し、.NET は JIT(実行可能メモリ)を
+# 使うため、SELinux enforcing 下ではサービス起動が拒否されることがある(execmem/execheap 等)。
+# 恒久対策としては SELinux を無効化するより、NativeAOT 版(JIT/展開なし)を使うのが安全。
+#   ./build-aot.sh   ->  publish/aot-linux-x64/Raccoon.RdpProxy を /opt/raccoon-rdpproxy へ配置
+# その後 SELinux を enforcing に戻して問題なく動くはず(execmem 不要になるため)。
+
+[Install]
+WantedBy=multi-user.target
