@@ -5,6 +5,9 @@ using System.Net.Security;
 // .NET 標準 NegotiateAuthentication(SSPI/GSSAPI) を使う CredSSP 認証。
 // Windows ではネイティブ SSPI、Linux では gss-ntlmssp が必要。
 // ハンドロールが実 Windows と噛み合わない場合のフォールバック(credssp-impl=negotiate)。
+// CredSSP authentication using the standard .NET NegotiateAuthentication (SSPI/GSSAPI).
+// Requires native SSPI on Windows, and gss-ntlmssp on Linux.
+// Fallback for when the hand-rolled implementation does not work against a real Windows host (credssp-impl=negotiate).
 internal sealed class NegotiateCredSspAuth : ICredSspAuth, IDisposable
 {
     private readonly NegotiateAuthentication na;
@@ -13,7 +16,7 @@ internal sealed class NegotiateCredSspAuth : ICredSspAuth, IDisposable
     {
         na = new NegotiateAuthentication(new NegotiateAuthenticationClientOptions
         {
-            Package = "NTLM", // IP 接続なので NTLM を明示(Kerberos は SPN 解決が要る)
+            Package = "NTLM", // IP 接続なので NTLM を明示(Kerberos は SPN 解決が要る) / specify NTLM explicitly because this is an IP connection (Kerberos would require SPN resolution)
             Credential = new NetworkCredential(user, password, domain),
             TargetName = spn,
             RequiredProtectionLevel = ProtectionLevel.EncryptAndSign

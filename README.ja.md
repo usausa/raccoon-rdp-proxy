@@ -54,18 +54,27 @@ TCP 送信元も `Source` で bind するため、**パケット内 clientAddres
 dotnet build Raccoon.RdpProxy/Raccoon.RdpProxy.csproj -c Release
 ```
 
-### A. 単一ファイル（Windows からクロスビルド・推奨）
-```bat
-build-linux.bat                 :: linux-x64（ランタイム同梱の単一ファイル）
-build-linux.bat linux-arm64     :: ARM リレー向け
-```
-→ `publish/linux-x64/Raccoon.RdpProxy`。リレー機に .NET 不要。（PowerShell 版 `build-linux.ps1` / Linux・macOS 版 `build-linux.sh` も同梱）
+### Linux 配布バイナリ（NativeAOT）
 
-### B. NativeAOT（Linux 上で実行・最速起動/省メモリ）
-NativeAOT は同一 OS でしか生成できないため **リレー Linux 上**で:
+配布物は **NativeAOT の単一バイナリ**（リレー機に .NET 不要・起動最速・省メモリ）。NativeAOT はビルドホストと同一 OS でしか生成できないため、`build-aot.bat` が Linux 環境に委譲します（**WSL → docker → podman** の順に自動判別）。
+
+```bat
+build-aot.bat
+```
+→ `publish/aot-linux-x64/Raccoon.RdpProxy`
+
+WSL 経路を使う場合は、ディストロ側に .NET SDK とリンクに必要なパッケージが必要です（初回のみ）:
+```bat
+wsl -e bash -lc "sudo apt update; sudo apt install -y clang zlib1g-dev"
+```
+
+> `build-aot.bat` のコメントだけ英語のみです。cmd.exe はバッチファイルをコンソールのコードページで読むため、UTF-8 の日本語が化け、化けたバイトがコマンド区切りとして解釈されて動作しなくなるためです。
+
+**Linux ホスト上**で直接ビルドする場合:
 ```bash
 sudo dnf install -y clang zlib-devel      # RHEL系（Debian系: apt install clang zlib1g-dev）
-./build-aot.sh                            # → publish/aot-linux-x64/Raccoon.RdpProxy
+dotnet publish Raccoon.RdpProxy/Raccoon.RdpProxy.csproj -c Release -r linux-x64 \
+  -p:PublishAot=true -p:StripSymbols=true -o publish/aot-linux-x64
 ```
 
 ## 実行
@@ -195,7 +204,7 @@ sc.exe delete Raccoon.RdpProxy
 ### systemd（Linux）
 ```bash
 sudo mkdir -p /opt/raccoon-rdpproxy
-sudo cp publish/linux-x64/Raccoon.RdpProxy /opt/raccoon-rdpproxy/
+sudo cp publish/aot-linux-x64/Raccoon.RdpProxy /opt/raccoon-rdpproxy/
 sudo cp Raccoon.RdpProxy/appsettings.json /opt/raccoon-rdpproxy/   # 複数 map をここに記載
 sudo chmod 600 /opt/raccoon-rdpproxy/appsettings.json             # 資格情報を含むため権限を絞る
 sudo cp raccoon-rdpproxy.service /etc/systemd/system/
@@ -220,7 +229,7 @@ docker build -t raccoon-rdpproxy .
 docker run -d --name raccoon-rdpproxy --restart unless-stopped \
   --network host -v /opt/raccoon-rdpproxy:/cfg raccoon-rdpproxy
 ```
-（同梱 [Dockerfile](Dockerfile) / [docker-compose.yml](docker-compose.yml)。ソースからビルドするので事前の単一ファイル生成は不要。`/cfg` の `appsettings.json` / `proxy.pfx` / `Log/` が使われる。）
+（同梱 [Dockerfile](Dockerfile) / [docker-compose.yml](docker-compose.yml)。同じ NativeAOT バイナリをソースからビルドするので事前のローカルビルドは不要。`/cfg` の `appsettings.json` / `proxy.pfx` / `Log/` が使われる。）
 
 ## 書き換わったことの確認（ターゲットで実行）
 

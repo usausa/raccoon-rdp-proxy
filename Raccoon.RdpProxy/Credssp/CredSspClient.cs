@@ -4,12 +4,13 @@ using System.Security.Cryptography;
 using System.Text;
 
 // ハンドロール CredSSP クライアント (MS-CSSP)。NLA 必須ターゲットへ資格情報を提示する。
+// Hand-rolled CredSSP client (MS-CSSP). Presents credentials to targets that require NLA.
 internal sealed class CredSspClient
 {
     private const int CredSspVersion = 6;
 
     private readonly ICredSspAuth auth;
-    private readonly byte[] serverPublicKey; // サーバ TLS 証明書の PKCS#1 RSAPublicKey
+    private readonly byte[] serverPublicKey; // サーバ TLS 証明書の PKCS#1 RSAPublicKey / PKCS#1 RSAPublicKey of the server TLS certificate
     private readonly string spn;
     private readonly string domain;
     private readonly string user;
@@ -55,6 +56,7 @@ internal sealed class CredSspClient
         log?.Invoke("CredSSP: AUTHENTICATE + pubKeyAuth sent");
 
         // 4) サーバ pubKeyAuth 応答
+        // 4) Server pubKeyAuth response
         byte[] t4;
         try
         {
@@ -91,6 +93,7 @@ internal sealed class CredSspClient
     }
 
     // TSRequest 構築
+    // Builds the TSRequest
     internal static byte[] BuildTsRequest(
         byte[]? negoToken = null,
         byte[]? authInfo = null,
@@ -126,7 +129,7 @@ internal sealed class CredSspClient
 
     internal static byte[]? ExtractNegoToken(byte[] tsRequest)
     {
-        var (_, cs, cl, _) = Der.ReadTlv(tsRequest, 0); // 外側 SEQUENCE
+        var (_, cs, cl, _) = Der.ReadTlv(tsRequest, 0); // 外側 SEQUENCE / outer SEQUENCE
         var seq = tsRequest.AsSpan(cs, cl);
         var negoData = Der.FindContext(seq, 1); // [1] NegoData
         if (negoData.IsEmpty)

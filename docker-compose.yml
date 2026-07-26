@@ -5,10 +5,15 @@ services:
     container_name: raccoon-rdpproxy
     # デュアルホーム(192.168.100.x / 192.168.50.x)と source bind のため host ネットワーク必須。
     # host ネットワークなので受付ポート(33031 等)はホスト上に直接開く(ports 指定は不要)。
+    # Host networking is required because of dual-homing (192.168.100.x / 192.168.50.x) and source binding.
+    # With host networking the listen ports (33031 etc.) open directly on the host (no ports mapping needed).
     network_mode: host
     restart: unless-stopped
     volumes:
       # appsettings.json(Proxy:Maps・資格情報・ログ設定) と proxy.pfx を置く。WORKDIR=/cfg で解決。
+      # Holds appsettings.json (Proxy:Maps, credentials, log settings) and proxy.pfx; resolved via WORKDIR=/cfg.
       - /opt/raccoon-rdpproxy:/cfg
     # 資格情報を含むため /opt/raccoon-rdpproxy/appsettings.json は chmod 600 推奨。
     # ログ量は appsettings.json の Serilog:MinimumLevel で調整(既定 Information=静か / Debug=詳細)。
+    # chmod 600 /opt/raccoon-rdpproxy/appsettings.json is recommended since it holds credentials.
+    # Log volume is tuned with Serilog:MinimumLevel in appsettings.json (default Information = quiet / Debug = verbose).

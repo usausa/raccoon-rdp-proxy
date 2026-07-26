@@ -54,18 +54,25 @@ The TCP source is also bound via `Source`, so **both the in-packet clientAddress
 dotnet build Raccoon.RdpProxy/Raccoon.RdpProxy.csproj -c Release
 ```
 
-### A. Single file (cross-build from Windows, recommended)
-```bat
-build-linux.bat                 :: linux-x64 (self-contained single file, runtime bundled)
-build-linux.bat linux-arm64     :: for ARM relays
-```
-→ `publish/linux-x64/Raccoon.RdpProxy`. No .NET needed on the relay. (A PowerShell version `build-linux.ps1` and a Linux/macOS version `build-linux.sh` are also included.)
+### Linux release binary (NativeAOT)
 
-### B. NativeAOT (run on Linux, fastest startup / lowest memory)
-NativeAOT can only be produced on the same OS, so run this **on the relay Linux**:
+The release artifact is a **NativeAOT single binary**: no runtime needed on the relay, fastest startup, lowest memory. NativeAOT can only be produced on the same OS as the build host, so `build-aot.bat` delegates to Linux — auto-detecting **WSL, docker, or podman**, in that order.
+
+```bat
+build-aot.bat
+```
+→ `publish/aot-linux-x64/Raccoon.RdpProxy`
+
+The WSL path needs the .NET SDK plus the linker prerequisites in the distro (installed once):
+```bat
+wsl -e bash -lc "sudo apt update; sudo apt install -y clang zlib1g-dev"
+```
+
+Building directly **on a Linux host** instead:
 ```bash
 sudo dnf install -y clang zlib-devel      # RHEL family (Debian family: apt install clang zlib1g-dev)
-./build-aot.sh                            # → publish/aot-linux-x64/Raccoon.RdpProxy
+dotnet publish Raccoon.RdpProxy/Raccoon.RdpProxy.csproj -c Release -r linux-x64 \
+  -p:PublishAot=true -p:StripSymbols=true -o publish/aot-linux-x64
 ```
 
 ## Run
@@ -195,7 +202,7 @@ When started as a service, the current directory is pinned to the executable's l
 ### systemd (Linux)
 ```bash
 sudo mkdir -p /opt/raccoon-rdpproxy
-sudo cp publish/linux-x64/Raccoon.RdpProxy /opt/raccoon-rdpproxy/
+sudo cp publish/aot-linux-x64/Raccoon.RdpProxy /opt/raccoon-rdpproxy/
 sudo cp Raccoon.RdpProxy/appsettings.json /opt/raccoon-rdpproxy/   # put the multiple maps here
 sudo chmod 600 /opt/raccoon-rdpproxy/appsettings.json             # tighten perms (contains credentials)
 sudo cp raccoon-rdpproxy.service /etc/systemd/system/
@@ -220,7 +227,7 @@ docker build -t raccoon-rdpproxy .
 docker run -d --name raccoon-rdpproxy --restart unless-stopped \
   --network host -v /opt/raccoon-rdpproxy:/cfg raccoon-rdpproxy
 ```
-(The included [Dockerfile](Dockerfile) / [docker-compose.yml](docker-compose.yml) build from source, so no prior single-file build is needed. The `appsettings.json` / `proxy.pfx` / `Log/` under `/cfg` are used.)
+(The included [Dockerfile](Dockerfile) / [docker-compose.yml](docker-compose.yml) build the same NativeAOT binary from source, so no prior local build is needed. The `appsettings.json` / `proxy.pfx` / `Log/` under `/cfg` are used.)
 
 ## Verifying the rewrite (run on the target)
 

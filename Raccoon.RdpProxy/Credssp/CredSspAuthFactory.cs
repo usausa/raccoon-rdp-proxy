@@ -3,6 +3,7 @@ namespace Raccoon.RdpProxy.Credssp;
 using Raccoon.RdpProxy.Ntlm;
 
 // impl 名から ICredSspAuth を生成する。
+// Creates an ICredSspAuth from the impl name.
 internal static class CredSspAuthFactory
 {
     public static ICredSspAuth Create(string? impl, string domain, string user, string password, string? ntHashHex, string spn)

@@ -1,6 +1,7 @@
 namespace Raccoon.RdpProxy.Ntlm;
 
 // MD4 (RFC 1320)。.NET に無いため実装。NTLM の NT ハッシュ生成に使う。
+// MD4 (RFC 1320). Implemented here because .NET does not provide it. Used to generate the NTLM NT hash.
 internal static class Md4
 {
     public static byte[] Hash(ReadOnlySpan<byte> msg)

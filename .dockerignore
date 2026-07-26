@@ -1,4 +1,5 @@
 # ビルドコンテキストから除外(ビルド成果物・秘密情報・不要物)
+# Excluded from the build context (build artifacts, secrets, and noise)
 publish/
 **/bin/
 **/obj/

@@ -52,12 +52,13 @@ internal static class RdpNegotiation
     }
 
     // サーバの CC を解析。RSP なら selected、FAILURE なら例外。
+    // Parse the server's CC. Returns selected for RSP; throws on FAILURE.
     public static (uint Selected, byte Flags) ParseConnectionConfirm(ReadOnlySpan<byte> cc)
     {
         const int negStart = 4 + 1 + 6;
         if (cc.Length < (negStart + 8))
         {
-            return (RdpConstants.ProtocolRdp, 0); // Neg 無し = 標準RDP
+            return (RdpConstants.ProtocolRdp, 0); // Neg 無し = 標準RDP / no Neg = standard RDP
         }
 
         var type = cc[negStart];

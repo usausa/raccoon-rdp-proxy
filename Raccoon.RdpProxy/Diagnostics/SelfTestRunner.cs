@@ -9,6 +9,7 @@ using Raccoon.RdpProxy.Protocol;
 using Raccoon.RdpProxy.Security;
 
 // ネットワーク不要の自己テスト。移植で暗号/書き換えが壊れていないかを検証する。
+// Self-test that needs no network. Verifies that the crypto and rewriting were not broken by the port.
 internal static class SelfTestRunner
 {
     public static int RunAll()
@@ -87,12 +88,14 @@ internal static class SelfTestRunner
     private static void TestClientIdentityMask()
     {
         // name のみ (productId 保持)
+        // Name only (productId preserved).
         var a1 = BuildMcsConnectInitial(0xAA);
         Assert(McsConnectInitial.PatchClientIdentity(a1, "RELAY01", false), "name-only not patched");
         Assert(Encoding.Unicode.GetString(a1, 9 + 24, 32).TrimEnd('\0') == "RELAY01", "clientName mismatch");
         Assert(a1[9 + 146] == 0xAA, "productId should be preserved for name-only");
 
         // 追加マスク (productId ゼロ)
+        // Additional mask (productId zeroed).
         var a2 = BuildMcsConnectInitial(0xAA);
         Assert(McsConnectInitial.PatchClientIdentity(a2, "RELAY01", true), "full not patched");
         for (var i = 0; i < 64; i++)
@@ -118,6 +121,7 @@ internal static class SelfTestRunner
     }
 
     // 出力 PDU から clientAddress 直後の tail を取り出す。
+    // Extract the tail that immediately follows clientAddress from the output PDU.
     private static byte[] ExtractTail(byte[] tpkt)
     {
         ReadOnlySpan<byte> s = tpkt;
@@ -201,6 +205,7 @@ internal static class SelfTestRunner
         Eq("EncryptedRandomSessionKey", Rc4.Encrypt(sbk, Convert.FromHexString("55555555555555555555555555555555")), "c5dad2544fc9799094ce1ce90bc9d03e");
 
         // Seal -> server 側鍵で復号できること
+        // Seal -> must be decryptable with the server-side key.
         var esk = Convert.FromHexString("55555555555555555555555555555555");
         var a = new NtlmClientAuth("D", "U", "P");
         a.DeriveSessionSecurity(esk);

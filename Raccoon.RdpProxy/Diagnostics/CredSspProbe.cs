@@ -9,6 +9,7 @@ using Raccoon.RdpProxy.Helpers;
 using Raccoon.RdpProxy.Protocol;
 
 // 指定ホストへバックエンド脚だけ実行して CredSSP 認証を検証するプローブ (mstsc 不要)。
+// Probe that runs only the backend leg against the given host to verify CredSSP authentication (no mstsc needed).
 //   --credssp-probe HOST:PORT --user U --password P --domain D [--credssp-impl handroll|negotiate]
 internal static class CredSspProbe
 {
