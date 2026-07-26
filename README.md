@@ -56,21 +56,56 @@ dotnet build Raccoon.RdpProxy/Raccoon.RdpProxy.csproj -c Release
 
 ### Linux release binary
 
-Two scripts produce the Linux artifact. Both are self-contained (the relay needs no .NET runtime) and both only *produce* the binary — you copy it to the relay yourself.
+Three scripts produce the Linux artifact. All are self-contained (the relay needs no .NET runtime) and all only *produce* the binary — you copy it to the relay yourself.
 
-| | `build-aot.bat` | `build-linux.bat` |
-| --- | --- | --- |
-| Build host | **WSL** (Linux host required) | **Windows only** |
-| Compilation | NativeAOT (native code) | JIT, single-file bundle |
-| Output | `publish/aot-linux-x64/` | `publish/linux-x64/` |
-| Size | **~9 MB** | ~38 MB |
-| Startup / memory | fastest / lowest | higher (JIT + startup extraction) |
-| Prerequisites | WSL + .NET SDK + clang + zlib headers | .NET SDK on Windows only |
-| SELinux `enforcing` | no `execmem` needed | may need `execmem` (extraction + JIT) |
+| | `build-aot.sh` | `build-aot.bat` | `build-linux.bat` |
+| --- | --- | --- | --- |
+| Build host | **Linux** (Rocky Linux etc.) | Windows (publishes via **WSL**) | **Windows only** |
+| Compilation | NativeAOT (native code) | NativeAOT (native code) | JIT, single-file bundle |
+| Output | `publish/aot-linux-x64/` | `publish/aot-linux-x64/` | `publish/linux-x64/` |
+| Size | **~9 MB** | **~9 MB** | ~38 MB |
+| Startup / memory | fastest / lowest | fastest / lowest | higher (JIT + startup extraction) |
+| Prerequisites | .NET SDK + clang + zlib headers | WSL + the same set | .NET SDK on Windows only |
+| SELinux `enforcing` | no `execmem` needed | no `execmem` needed | may need `execmem` (extraction + JIT) |
 
-Prefer `build-aot.bat` for releases; use `build-linux.bat` when no Linux build host is available.
+If the relay runs Rocky Linux, prefer **`build-aot.sh` (A)** — building on the same family as the relay avoids any glibc mismatch. With only Windows available use `build-aot.bat` (B, via WSL), and `build-linux.bat` (C) when no Linux build host can be arranged at all.
 
-#### A. NativeAOT (build-aot.bat)
+#### A. Building on Rocky Linux (build-aot.sh)
+
+**1. Prerequisites (once)**
+
+```bash
+# Rocky Linux 9
+sudo dnf install -y dotnet-sdk-10.0 clang zlib-devel
+
+# Rocky Linux 10 (zlib was replaced by zlib-ng, so the package differs)
+sudo dnf install -y dotnet-sdk-10.0 clang zlib-ng-compat-devel
+```
+
+`clang` and the zlib headers are what NativeAOT needs to **link** ([Microsoft's prerequisites](https://learn.microsoft.com/dotnet/core/deploying/native-aot/)). If `dotnet-sdk-10.0` has not reached your AppStream yet (older minor version, etc.), use Microsoft's script:
+
+```bash
+curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel 10.0
+echo 'export PATH="$HOME/.dotnet:$PATH"' >> ~/.bashrc && . ~/.bashrc
+dotnet --list-sdks     # a 10.x line means you are set
+```
+
+**2. Build**
+
+```bash
+chmod +x build-aot.sh        # the execute bit is often lost when the tree comes from Windows
+./build-aot.sh               # defaults to the build host architecture (x86_64 → linux-x64)
+./build-aot.sh linux-arm64   # on an ARM machine, for ARM
+```
+
+The script verifies `dotnet` / SDK 10 / `clang` / the zlib headers before publishing, and finishes by running `--selftest` (the network-free self test) against the binary it just built.
+→ `publish/aot-linux-x64/` holds `Raccoon.RdpProxy` (~9 MB) and `appsettings.json`. Deploy those two to the relay (see systemd under "Running as a resident service").
+
+> **glibc compatibility only goes forward**: a NativeAOT binary needs **the glibc of the build host or newer**. Built on Rocky 9 it runs on Rocky 9 / 10, but not on Rocky 8 — for a Rocky 8 relay, build on Rocky 8 (.NET 10 supports the RHEL 8 / 9 / 10 families).
+
+> No extra runtime packages are normally needed (globalization is off via `InvariantGlobalization`, and OpenSSL ships with the distro). Only when `Proxy:CredsspImpl` is set to `negotiate` does the relay also need `sudo dnf install -y gssntlmssp` (the default `handroll` has no dependencies).
+
+#### B. From Windows via WSL (build-aot.bat)
 
 NativeAOT cannot cross-compile from Windows to Linux — it requires a Linux build host — so the publish itself runs in **WSL**.
 
@@ -80,7 +115,9 @@ build-aot.bat linux-arm64     :: for ARM relays
 ```
 → `publish/aot-linux-x64/Raccoon.RdpProxy`. Copy it together with `appsettings.json` to the relay host.
 
-#### B. Windows-only (build-linux.bat)
+> **Use A when the relay runs Rocky Linux.** If the WSL distro's glibc is newer than the relay's (e.g. Ubuntu 22.04 = glibc 2.35 vs Rocky 9 = glibc 2.34), the resulting binary can fail to start on the relay with `GLIBC_2.35 not found`.
+
+#### C. Windows-only (build-linux.bat)
 
 Cross-publishes a self-contained single-file binary entirely on Windows — no WSL, no containers. This uses the JIT runtime instead of NativeAOT, which is why it can cross-compile.
 
@@ -128,9 +165,8 @@ clang --version
 
 > The build runs over `/mnt/...` (drvfs), so it is slower than a build inside the Linux filesystem. Cloning the repository into the distro's own filesystem and building there is faster if you iterate often.
 
-Building directly **on a Linux host** instead:
+What runs inside WSL is the same command `build-aot.sh` (A) uses. Without the script wrapper:
 ```bash
-sudo dnf install -y clang zlib-devel      # RHEL family (Debian family: apt install clang zlib1g-dev)
 dotnet publish Raccoon.RdpProxy/Raccoon.RdpProxy.csproj -c Release -r linux-x64 \
   -p:PublishAot=true -p:StripSymbols=true -o publish/aot-linux-x64
 ```
@@ -261,16 +297,16 @@ When started as a service, the current directory is pinned to the executable's l
 
 ### systemd (Linux)
 ```bash
-sudo mkdir -p /opt/raccoon-rdpproxy
-sudo cp publish/aot-linux-x64/Raccoon.RdpProxy /opt/raccoon-rdpproxy/
-sudo cp Raccoon.RdpProxy/appsettings.json /opt/raccoon-rdpproxy/   # put the multiple maps here
-sudo chmod 600 /opt/raccoon-rdpproxy/appsettings.json             # tighten perms (contains credentials)
-sudo cp raccoon-rdpproxy.service /etc/systemd/system/
+sudo mkdir -p /opt/rdp-proxy
+sudo cp publish/aot-linux-x64/Raccoon.RdpProxy /opt/rdp-proxy/
+sudo cp publish/aot-linux-x64/appsettings.json /opt/rdp-proxy/    # put the multiple maps here
+sudo chmod 600 /opt/rdp-proxy/appsettings.json                    # tighten perms (contains credentials)
+sudo cp rdp-proxy.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now raccoon-rdpproxy
-journalctl -u raccoon-rdpproxy -f                                 # view logs
+sudo systemctl enable --now rdp-proxy
+journalctl -u rdp-proxy -f                                        # view logs
 ```
-(The included [raccoon-rdpproxy.service](raccoon-rdpproxy.service) uses `Type=notify` to wait until the listeners are up. `proxy.pfx` is auto-generated on first run and saved in `/opt/raccoon-rdpproxy`.)
+(The included [rdp-proxy.service](rdp-proxy.service) uses `Type=notify` to wait until the listeners are up. `proxy.pfx` is auto-generated on first run and saved in `/opt/rdp-proxy`. To use a different directory, change `WorkingDirectory` / `ExecStart` / `ReadWritePaths` in the unit together.)
 
 ### Docker / docker-compose
 Because of dual-homing and source binding, **host networking is required** (the listen ports open directly on the host). Credentials are not baked into the image; mount them at `/cfg`.

@@ -56,21 +56,56 @@ dotnet build Raccoon.RdpProxy/Raccoon.RdpProxy.csproj -c Release
 
 ### Linux 配布バイナリ
 
-Linux 向け成果物を作る bat は 2 つあります。どちらも自己完結（リレー機に .NET 不要）で、**成果物の生成のみ**を行います（転送は手動）。
+Linux 向け成果物の作り方は 3 通りあります。どれも自己完結（リレー機に .NET 不要）で、**成果物の生成のみ**を行います（転送は手動）。
 
-| | `build-aot.bat` | `build-linux.bat` |
-| --- | --- | --- |
-| ビルドホスト | **WSL**（Linux ホストが必要） | **Windows 単体** |
-| コンパイル方式 | NativeAOT（ネイティブコード） | JIT・単一ファイルバンドル |
-| 出力先 | `publish/aot-linux-x64/` | `publish/linux-x64/` |
-| サイズ | **約 9 MB** | 約 38 MB |
-| 起動速度 / メモリ | 最速 / 最小 | 劣る（JIT＋起動時展開） |
-| 前提 | WSL＋.NET SDK＋clang＋zlib ヘッダ | Windows の .NET SDK のみ |
-| SELinux `enforcing` | `execmem` 不要 | `execmem` が要る場合あり（展開＋JIT） |
+| | `build-aot.sh` | `build-aot.bat` | `build-linux.bat` |
+| --- | --- | --- | --- |
+| ビルドホスト | **Linux**（Rocky Linux 等） | Windows（発行は **WSL**） | **Windows 単体** |
+| コンパイル方式 | NativeAOT（ネイティブコード） | NativeAOT（ネイティブコード） | JIT・単一ファイルバンドル |
+| 出力先 | `publish/aot-linux-x64/` | `publish/aot-linux-x64/` | `publish/linux-x64/` |
+| サイズ | **約 9 MB** | **約 9 MB** | 約 38 MB |
+| 起動速度 / メモリ | 最速 / 最小 | 最速 / 最小 | 劣る（JIT＋起動時展開） |
+| 前提 | .NET SDK＋clang＋zlib ヘッダ | WSL＋左記一式 | Windows の .NET SDK のみ |
+| SELinux `enforcing` | `execmem` 不要 | `execmem` 不要 | `execmem` が要る場合あり（展開＋JIT） |
 
-リリースには `build-aot.bat` を推奨。Linux ビルドホストが用意できない場合に `build-linux.bat` を使います。
+リレー機が Rocky Linux なら **`build-aot.sh`（A）を推奨**します（リレー機と同系統でビルドするので glibc の食い違いが起きない）。Windows しか無い場合は WSL 経由の `build-aot.bat`（B）、Linux ビルドホストを用意できない場合に `build-linux.bat`（C）。
 
-#### A. NativeAOT（build-aot.bat）
+#### A. Rocky Linux でビルド（build-aot.sh）
+
+**1. 前提パッケージ（初回のみ）**
+
+```bash
+# Rocky Linux 9
+sudo dnf install -y dotnet-sdk-10.0 clang zlib-devel
+
+# Rocky Linux 10（zlib が zlib-ng に置き換わっているため別パッケージ）
+sudo dnf install -y dotnet-sdk-10.0 clang zlib-ng-compat-devel
+```
+
+`clang` と zlib ヘッダは NativeAOT の**リンク**に必要です（[Microsoft の前提条件](https://learn.microsoft.com/ja-jp/dotnet/core/deploying/native-aot/)）。AppStream に `dotnet-sdk-10.0` が来ていない場合（マイナーバージョンが古い等）は Microsoft のスクリプトで導入します:
+
+```bash
+curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel 10.0
+echo 'export PATH="$HOME/.dotnet:$PATH"' >> ~/.bashrc && . ~/.bashrc
+dotnet --list-sdks     # 10.x が出れば OK
+```
+
+**2. ビルド**
+
+```bash
+chmod +x build-aot.sh        # Windows 側から持ち込んだ場合は実行権が落ちていることがある
+./build-aot.sh               # 既定はビルドホストのアーキ（x86_64 → linux-x64）
+./build-aot.sh linux-arm64   # ARM 機上で ARM 向け
+```
+
+発行前に `dotnet` / SDK 10 / `clang` / zlib ヘッダを確認し、発行後に `--selftest`（ネットワーク不要の自己テスト）まで通してから完了します。
+→ `publish/aot-linux-x64/` に `Raccoon.RdpProxy`（約 9 MB）と `appsettings.json`。この 2 つをリレー機へ配置します（→ 常駐運用の systemd）。
+
+> **glibc の互換方向に注意**: NativeAOT バイナリは**ビルドしたホストの glibc 以上**でしか動きません。Rocky 9 でビルド → Rocky 9 / 10 で動作、Rocky 8 では動きません。リレー機が Rocky 8 なら Rocky 8 でビルドします（.NET 10 は RHEL 8 / 9 / 10 系すべてをサポート）。
+
+> 追加の実行時パッケージは通常不要です（グローバリゼーションは `InvariantGlobalization` で無効化済み、OpenSSL は標準で入っている）。`Proxy:CredsspImpl` を `negotiate` にする場合のみ、リレー機に `sudo dnf install -y gssntlmssp` が要ります（既定の `handroll` は依存なし）。
+
+#### B. Windows から WSL 経由（build-aot.bat）
 
 NativeAOT は Windows から Linux 向けにクロスコンパイルできず **Linux ビルドホストが必須**のため、発行自体は **WSL** で実行します。
 
@@ -80,7 +115,9 @@ build-aot.bat linux-arm64     :: ARM リレー向け
 ```
 → `publish/aot-linux-x64/Raccoon.RdpProxy`。`appsettings.json` と一緒にリレー機へコピーします。
 
-#### B. Windows 単体（build-linux.bat）
+> **リレー機が Rocky Linux なら A を使ってください。** WSL のディストロの glibc がリレー機より新しいと（例: Ubuntu 22.04 = glibc 2.35 > Rocky 9 = glibc 2.34）、出来たバイナリがリレー機で `GLIBC_2.35 not found` で起動しないことがあります。
+
+#### C. Windows 単体（build-linux.bat）
 
 自己完結の単一ファイルを **Windows だけ**でクロス発行します（WSL・コンテナ不要）。NativeAOT ではなく JIT ランタイムを同梱する方式なので、OS を跨いだ発行が可能です。
 
@@ -130,9 +167,8 @@ clang --version
 
 > `build-aot.bat` のコメントだけ英語のみです。cmd.exe はバッチファイルをコンソールのコードページで読むため、UTF-8 の日本語が化け、化けたバイトがコマンド区切りとして解釈されて動作しなくなるためです。
 
-**Linux ホスト上**で直接ビルドする場合:
+なお WSL 内で発行しているのは `build-aot.sh`（A）と同じコマンドです。スクリプトを介さず直接叩く場合:
 ```bash
-sudo dnf install -y clang zlib-devel      # RHEL系（Debian系: apt install clang zlib1g-dev）
 dotnet publish Raccoon.RdpProxy/Raccoon.RdpProxy.csproj -c Release -r linux-x64 \
   -p:PublishAot=true -p:StripSymbols=true -o publish/aot-linux-x64
 ```
@@ -263,16 +299,16 @@ sc.exe delete Raccoon.RdpProxy
 
 ### systemd（Linux）
 ```bash
-sudo mkdir -p /opt/raccoon-rdpproxy
-sudo cp publish/aot-linux-x64/Raccoon.RdpProxy /opt/raccoon-rdpproxy/
-sudo cp Raccoon.RdpProxy/appsettings.json /opt/raccoon-rdpproxy/   # 複数 map をここに記載
-sudo chmod 600 /opt/raccoon-rdpproxy/appsettings.json             # 資格情報を含むため権限を絞る
-sudo cp raccoon-rdpproxy.service /etc/systemd/system/
+sudo mkdir -p /opt/rdp-proxy
+sudo cp publish/aot-linux-x64/Raccoon.RdpProxy /opt/rdp-proxy/
+sudo cp publish/aot-linux-x64/appsettings.json /opt/rdp-proxy/    # 複数 map をここに記載
+sudo chmod 600 /opt/rdp-proxy/appsettings.json                    # 資格情報を含むため権限を絞る
+sudo cp rdp-proxy.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now raccoon-rdpproxy
-journalctl -u raccoon-rdpproxy -f                                 # ログ確認
+sudo systemctl enable --now rdp-proxy
+journalctl -u rdp-proxy -f                                        # ログ確認
 ```
-（同梱 [raccoon-rdpproxy.service](raccoon-rdpproxy.service)。`Type=notify` で待受確立まで待機。`proxy.pfx` は初回に自動生成され `/opt/raccoon-rdpproxy` に保存。）
+（同梱 [rdp-proxy.service](rdp-proxy.service)。`Type=notify` で待受確立まで待機。`proxy.pfx` は初回に自動生成され `/opt/rdp-proxy` に保存。ディレクトリを変える場合は unit 内の `WorkingDirectory` / `ExecStart` / `ReadWritePaths` を揃えて修正。）
 
 ### Docker / docker-compose
 デュアルホームと source bind のため **host ネットワーク必須**（受付ポートはホストに直接開く）。資格情報はイメージに焼かず `/cfg` にマウント。
