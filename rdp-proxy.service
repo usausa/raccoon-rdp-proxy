@@ -1,0 +1,19 @@
+[Unit]
+Description=Raccoon RDP Proxy
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+WorkingDirectory=/opt/rdp-proxy
+ExecStart=/opt/rdp-proxy/Raccoon.RdpProxy
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/rdp-proxy
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

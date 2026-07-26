@@ -54,19 +54,79 @@ TCP 送信元も `Source` で bind するため、**パケット内 clientAddres
 dotnet build Raccoon.RdpProxy/Raccoon.RdpProxy.csproj -c Release
 ```
 
-### Linux 配布バイナリ（NativeAOT）
+### Linux 配布バイナリ
 
-配布物は **NativeAOT の単一バイナリ**（リレー機に .NET 不要・起動最速・省メモリ）。NativeAOT はビルドホストと同一 OS でしか生成できないため、`build-aot.bat` が Linux 環境に委譲します（**WSL → docker → podman** の順に自動判別）。
+Linux 向け成果物を作る bat は 2 つあります。どちらも自己完結（リレー機に .NET 不要）で、**成果物の生成のみ**を行います（転送は手動）。
+
+| | `build-aot.bat` | `build-linux.bat` |
+| --- | --- | --- |
+| ビルドホスト | **WSL**（Linux ホストが必要） | **Windows 単体** |
+| コンパイル方式 | NativeAOT（ネイティブコード） | JIT・単一ファイルバンドル |
+| 出力先 | `publish/aot-linux-x64/` | `publish/linux-x64/` |
+| サイズ | **約 9 MB** | 約 38 MB |
+| 起動速度 / メモリ | 最速 / 最小 | 劣る（JIT＋起動時展開） |
+| 前提 | WSL＋.NET SDK＋clang＋zlib ヘッダ | Windows の .NET SDK のみ |
+| SELinux `enforcing` | `execmem` 不要 | `execmem` が要る場合あり（展開＋JIT） |
+
+リリースには `build-aot.bat` を推奨。Linux ビルドホストが用意できない場合に `build-linux.bat` を使います。
+
+#### A. NativeAOT（build-aot.bat）
+
+NativeAOT は Windows から Linux 向けにクロスコンパイルできず **Linux ビルドホストが必須**のため、発行自体は **WSL** で実行します。
 
 ```bat
-build-aot.bat
+build-aot.bat                 :: linux-x64（既定）
+build-aot.bat linux-arm64     :: ARM リレー向け
 ```
-→ `publish/aot-linux-x64/Raccoon.RdpProxy`
+→ `publish/aot-linux-x64/Raccoon.RdpProxy`。`appsettings.json` と一緒にリレー機へコピーします。
 
-WSL 経路を使う場合は、ディストロ側に .NET SDK とリンクに必要なパッケージが必要です（初回のみ）:
+#### B. Windows 単体（build-linux.bat）
+
+自己完結の単一ファイルを **Windows だけ**でクロス発行します（WSL・コンテナ不要）。NativeAOT ではなく JIT ランタイムを同梱する方式なので、OS を跨いだ発行が可能です。
+
 ```bat
-wsl -e bash -lc "sudo apt update; sudo apt install -y clang zlib1g-dev"
+build-linux.bat                 :: linux-x64（既定）
+build-linux.bat linux-arm64     :: ARM リレー向け
 ```
+→ `publish/linux-x64/Raccoon.RdpProxy`。`appsettings.json` と一緒にリレー機へコピーします。
+
+Windows 側に必要なのは .NET SDK だけです。
+
+#### WSL の初期セットアップ（build-aot.bat 用・初回のみ）
+
+発行は **既定のディストロ**で実行されます。WSL はカレントの Windows ディレクトリを自動的にマウントするため、成果物はこのリポジトリ内に戻ってきます。
+
+```bat
+:: 1. ディストロの導入（既にあれば不要）
+wsl --install -d Ubuntu
+
+:: 2. 既定に設定（build-aot.bat は既定のディストロを使う）
+wsl --set-default Ubuntu
+wsl --list --verbose
+```
+
+続いてディストロ内で、.NET SDK 10 と NativeAOT のリンクに必要なパッケージを導入します:
+
+```bash
+sudo apt update
+sudo apt install -y dotnet-sdk-10.0 clang zlib1g-dev
+```
+
+`dotnet-sdk-10.0` パッケージが無いディストロでは、[Microsoft の導入手順](https://learn.microsoft.com/ja-jp/dotnet/core/install/linux)に従うか、インストールスクリプトを使います:
+
+```bash
+curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel 10.0
+echo 'export PATH="$HOME/.dotnet:$PATH"' >> ~/.bashrc
+```
+
+確認（`build-aot.bat` はこの 2 つを起動時にチェックします）:
+
+```bash
+dotnet --version
+clang --version
+```
+
+> ビルドは `/mnt/...`（drvfs）越しに走るため、Linux ファイルシステム内でのビルドより低速です。頻繁に回すならディストロ側にクローンしてビルドする方が高速です。
 
 > `build-aot.bat` のコメントだけ英語のみです。cmd.exe はバッチファイルをコンソールのコードページで読むため、UTF-8 の日本語が化け、化けたバイトがコマンド区切りとして解釈されて動作しなくなるためです。
 

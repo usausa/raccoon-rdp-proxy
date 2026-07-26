@@ -54,19 +54,79 @@ The TCP source is also bound via `Source`, so **both the in-packet clientAddress
 dotnet build Raccoon.RdpProxy/Raccoon.RdpProxy.csproj -c Release
 ```
 
-### Linux release binary (NativeAOT)
+### Linux release binary
 
-The release artifact is a **NativeAOT single binary**: no runtime needed on the relay, fastest startup, lowest memory. NativeAOT can only be produced on the same OS as the build host, so `build-aot.bat` delegates to Linux — auto-detecting **WSL, docker, or podman**, in that order.
+Two scripts produce the Linux artifact. Both are self-contained (the relay needs no .NET runtime) and both only *produce* the binary — you copy it to the relay yourself.
+
+| | `build-aot.bat` | `build-linux.bat` |
+| --- | --- | --- |
+| Build host | **WSL** (Linux host required) | **Windows only** |
+| Compilation | NativeAOT (native code) | JIT, single-file bundle |
+| Output | `publish/aot-linux-x64/` | `publish/linux-x64/` |
+| Size | **~9 MB** | ~38 MB |
+| Startup / memory | fastest / lowest | higher (JIT + startup extraction) |
+| Prerequisites | WSL + .NET SDK + clang + zlib headers | .NET SDK on Windows only |
+| SELinux `enforcing` | no `execmem` needed | may need `execmem` (extraction + JIT) |
+
+Prefer `build-aot.bat` for releases; use `build-linux.bat` when no Linux build host is available.
+
+#### A. NativeAOT (build-aot.bat)
+
+NativeAOT cannot cross-compile from Windows to Linux — it requires a Linux build host — so the publish itself runs in **WSL**.
 
 ```bat
-build-aot.bat
+build-aot.bat                 :: linux-x64 (default)
+build-aot.bat linux-arm64     :: for ARM relays
 ```
-→ `publish/aot-linux-x64/Raccoon.RdpProxy`
+→ `publish/aot-linux-x64/Raccoon.RdpProxy`. Copy it together with `appsettings.json` to the relay host.
 
-The WSL path needs the .NET SDK plus the linker prerequisites in the distro (installed once):
+#### B. Windows-only (build-linux.bat)
+
+Cross-publishes a self-contained single-file binary entirely on Windows — no WSL, no containers. This uses the JIT runtime instead of NativeAOT, which is why it can cross-compile.
+
 ```bat
-wsl -e bash -lc "sudo apt update; sudo apt install -y clang zlib1g-dev"
+build-linux.bat                 :: linux-x64 (default)
+build-linux.bat linux-arm64     :: for ARM relays
 ```
+→ `publish/linux-x64/Raccoon.RdpProxy`. Copy it together with `appsettings.json` to the relay host.
+
+Nothing beyond the .NET SDK is required on the Windows host.
+
+#### One-time WSL setup (for build-aot.bat)
+
+The publish runs in the **default** WSL distro, and WSL maps the current Windows directory automatically, so the artifact lands back in this repository.
+
+```bat
+:: 1. Install a distro (skip if you already have one)
+wsl --install -d Ubuntu
+
+:: 2. Make it the default (build-aot.bat uses the default distro)
+wsl --set-default Ubuntu
+wsl --list --verbose
+```
+
+Then, inside the distro, install the .NET SDK 10 and the NativeAOT link prerequisites:
+
+```bash
+sudo apt update
+sudo apt install -y dotnet-sdk-10.0 clang zlib1g-dev
+```
+
+If your distro has no `dotnet-sdk-10.0` package, follow [Microsoft's install guide](https://learn.microsoft.com/dotnet/core/install/linux) or use the install script:
+
+```bash
+curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel 10.0
+echo 'export PATH="$HOME/.dotnet:$PATH"' >> ~/.bashrc
+```
+
+Verify — `build-aot.bat` checks exactly these two:
+
+```bash
+dotnet --version
+clang --version
+```
+
+> The build runs over `/mnt/...` (drvfs), so it is slower than a build inside the Linux filesystem. Cloning the repository into the distro's own filesystem and building there is faster if you iterate often.
 
 Building directly **on a Linux host** instead:
 ```bash

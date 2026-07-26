@@ -4,88 +4,82 @@ setlocal
 rem ============================================================
 rem  Build the Linux NativeAOT single binary (run from Windows).
 rem
-rem  NativeAOT can only be produced on the same OS as the build host,
-rem  so this delegates to Linux. It auto-detects what is available,
-rem  in the order WSL, docker, podman.
+rem  NativeAOT cannot cross compile from Windows to Linux - it requires a
+rem  Linux build host - so the publish itself runs in WSL. This script only
+rem  produces the artifact; copy it to the relay host yourself.
 rem
-rem  NOTE: comments in this file are English only on purpose. cmd.exe reads
-rem  batch files in the console code page, so UTF-8 Japanese would be mangled
-rem  and the mangled bytes can be parsed as command separators.
+rem  One-time setup in the default WSL distro:
+rem    wsl --set-default Ubuntu
+rem    sudo apt update
+rem    sudo apt install -y clang zlib1g-dev
+rem    plus the .NET SDK 10 (dotnet --version)
+rem  See README.md / README.ja.md for the full setup steps.
+rem
+rem  NOTE: comments are English only on purpose. cmd.exe reads batch files in
+rem  the console code page, so UTF-8 Japanese would be mangled and the mangled
+rem  bytes can be parsed as command separators.
 rem  The Japanese description lives in README.ja.md instead.
 rem
-rem  Usage  : build-aot.bat
+rem  Usage  : build-aot.bat [linux-x64^|linux-arm64]
 rem  Output : publish/aot-linux-x64/Raccoon.RdpProxy
 rem ============================================================
 
-set RID=linux-x64
+set RID=%1
+if "%RID%"=="" set RID=linux-x64
 set OUT=publish/aot-%RID%
-set PUBLISH=dotnet publish Raccoon.RdpProxy/Raccoon.RdpProxy.csproj -c Release -r %RID% -p:PublishAot=true -p:StripSymbols=true -o %OUT%
 
 cd /d "%~dp0"
 
-rem --- 1) WSL: fastest, native build when the .NET SDK is present ---
 where wsl >nul 2>&1
-if errorlevel 1 goto :try_docker
-wsl -e bash -lc "command -v dotnet >/dev/null 2>&1"
-if errorlevel 1 goto :try_docker
+if errorlevel 1 goto :nowsl
 
+rem The publish runs in the DEFAULT distro; wsl maps the current Windows
+rem directory automatically, so the output lands back in this repository.
+wsl -e bash -lc "command -v dotnet >/dev/null 2>&1"
+if errorlevel 1 goto :nodotnet
 wsl -e bash -lc "command -v clang >/dev/null 2>&1"
 if errorlevel 1 goto :noclang
 
-echo Building %RID% NativeAOT binary via WSL...
+echo Publishing %RID% NativeAOT binary via WSL...
 echo.
-wsl -e bash -lc "%PUBLISH%"
+wsl -e bash -lc "dotnet publish Raccoon.RdpProxy/Raccoon.RdpProxy.csproj -c Release -r %RID% -p:PublishAot=true -p:StripSymbols=true -o %OUT%"
 if errorlevel 1 goto :failed
-goto :done
 
-rem --- 2) docker ---
-:try_docker
-where docker >nul 2>&1
-if errorlevel 1 goto :try_podman
-echo Building %RID% NativeAOT binary in a docker container...
-echo.
-docker run --rm -v "%~dp0.":/src -w /src -v raccoon-rdpproxy-nuget:/root/.nuget/packages ^
-  mcr.microsoft.com/dotnet/sdk:10.0 ^
-  bash -lc "set -e; apt-get update >/dev/null && apt-get install -y --no-install-recommends clang zlib1g-dev >/dev/null && %PUBLISH%"
-if errorlevel 1 goto :failed
-goto :done
+if not exist "%OUT:/=\%\Raccoon.RdpProxy" goto :missing
 
-rem --- 3) podman ---
-:try_podman
-where podman >nul 2>&1
-if errorlevel 1 goto :nolinux
-echo Building %RID% NativeAOT binary in a podman container...
 echo.
-podman run --rm -v "%~dp0.":/src -w /src ^
-  mcr.microsoft.com/dotnet/sdk:10.0 ^
-  bash -lc "set -e; apt-get update >/dev/null && apt-get install -y --no-install-recommends clang zlib1g-dev >/dev/null && %PUBLISH%"
-if errorlevel 1 goto :failed
-goto :done
+echo Done: %OUT%/Raccoon.RdpProxy  (NativeAOT / no runtime required)
+echo Copy it together with appsettings.json to the relay host.
+goto :end
+
+:nowsl
+echo [ERROR] wsl not found. NativeAOT needs a Linux build host.
+echo Install WSL, then set up the distro as described in README.md.
+exit /b 1
+
+:nodotnet
+echo [ERROR] the .NET SDK was not found in the default WSL distro.
+echo.
+echo Check which distro is the default:  wsl --list --verbose
+echo Point it at the one with the SDK:   wsl --set-default Ubuntu
+exit /b 1
 
 :noclang
-rem NativeAOT cannot link without clang and the zlib headers.
 echo [ERROR] clang / zlib headers are missing in WSL. NativeAOT needs them to link.
 echo.
 echo Install them once, then re-run this script:
 echo   wsl -e bash -lc "sudo apt update; sudo apt install -y clang zlib1g-dev"
 exit /b 1
 
-:nolinux
-echo [ERROR] no Linux build environment found (WSL with .NET SDK, docker, or podman).
+:missing
 echo.
-echo Set up one of them, or build directly ON a Linux host:
-echo   sudo dnf install -y clang zlib-devel     # RHEL family
-echo   sudo apt install -y clang zlib1g-dev     # Debian family
-echo   %PUBLISH%
+echo [ERROR] the publish reported success but no binary was found in %OUT%.
 exit /b 1
 
 :failed
 echo.
-echo [ERROR] build failed.
+echo [ERROR] publish failed.
 exit /b 1
 
-:done
-echo.
-echo Done: %OUT%/Raccoon.RdpProxy  (NativeAOT / no runtime required)
-echo Copy it to the relay host together with appsettings.json.
+:end
 endlocal
