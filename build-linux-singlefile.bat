@@ -7,7 +7,7 @@ rem
 rem  Produces a self-contained single-file binary for Linux: the relay host
 rem  needs no .NET runtime. Everything runs on Windows - no WSL, no
 rem  containers - because this path uses the JIT runtime rather than
-rem  NativeAOT. For the smaller/faster NativeAOT binary use build-aot.bat,
+rem  NativeAOT. For the smaller/faster NativeAOT binary use build-linux-aot.bat,
 rem  which needs a Linux build host (WSL).
 rem
 rem  This script only produces the artifact; copy it to the relay yourself.
@@ -15,9 +15,8 @@ rem
 rem  NOTE: comments are English only on purpose. cmd.exe reads batch files in
 rem  the console code page, so UTF-8 Japanese would be mangled and the mangled
 rem  bytes can be parsed as command separators.
-rem  The Japanese description lives in README.ja.md instead.
 rem
-rem  Usage  : build-linux.bat [linux-x64^|linux-arm64]
+rem  Usage  : build-linux-singlefile.bat [linux-x64^|linux-arm64]
 rem  Output : publish/linux-x64/Raccoon.RdpProxy
 rem ============================================================
 

@@ -1,33 +1,27 @@
 #!/usr/bin/env bash
 # ============================================================
-#  Linux 上で NativeAOT の単一バイナリを生成する(Rocky Linux 等の RHEL 系を想定)。
 #  Build the NativeAOT single binary on Linux (aimed at Rocky Linux / the RHEL family).
 #
-#  NativeAOT は Windows から Linux 向けにクロスコンパイルできないため Linux ホストが要る。
-#  Windows から動かしたい場合は WSL 経由の build-aot.bat を使う(発行内容は同じ)。
 #  Native AOT cannot cross compile from Windows to Linux, so a Linux build host is
-#  required. To drive it from Windows use build-aot.bat instead (same publish, via WSL).
+#  required. To drive it from Windows use build-linux-aot.bat instead (same publish,
+#  via WSL).
 #
-#  前提 / Prerequisites:
+#  Prerequisites:
 #    Rocky 9   : sudo dnf install -y dotnet-sdk-10.0 clang zlib-devel
 #    Rocky 10  : sudo dnf install -y dotnet-sdk-10.0 clang zlib-ng-compat-devel
-#    Debian 系 : sudo apt install -y dotnet-sdk-10.0 clang zlib1g-dev
+#    Debian    : sudo apt install -y dotnet-sdk-10.0 clang zlib1g-dev
 #
-#  成果物の生成のみを行う(リレー機への配置は手動)。ビルドしたホストの glibc 以上でしか
-#  動かないため、リレー機と同じか、それより古いディストリでビルドすること。
 #  This only produces the artifact (deploying to the relay host is manual). The binary
 #  needs the glibc of the build host or newer, so build on a distribution that is the
 #  same as - or older than - the relay host.
 #
-#  使い方 / Usage  : ./build-aot.sh [linux-x64|linux-arm64]
-#  出力   / Output : publish/aot-linux-x64/Raccoon.RdpProxy
+#  Usage  : ./build-linux-aot.sh [linux-x64|linux-arm64]
+#  Output : publish/aot-linux-x64/Raccoon.RdpProxy
 # ============================================================
 set -euo pipefail
 
 cd "$(dirname "$0")"
 
-# 既定 RID はビルドホストのアーキテクチャ。別アーキ向けはクロスツールチェーンが要るので
-# 既定では拒否する(用意できているなら ALLOW_CROSS=1 で続行)。
 # The default RID is the build host architecture. Targeting another architecture needs a
 # cross toolchain, so it is refused by default (set ALLOW_CROSS=1 if you have one).
 case "$(uname -m)" in
@@ -50,7 +44,7 @@ fail() {
     exit 1
 }
 
-# --- 前提チェック / Prerequisite checks ---
+# --- Prerequisite checks ---
 
 command -v dotnet >/dev/null 2>&1 || fail \
     'the .NET SDK was not found.' \
@@ -68,7 +62,6 @@ command -v clang >/dev/null 2>&1 || fail \
     'clang was not found. NativeAOT needs it to link.' \
     'Rocky Linux : sudo dnf install -y clang'
 
-# zlib は NativeAOT のリンク時に必要(Rocky 10 では zlib-ng が本体で zlib.h は互換パッケージ側)。
 # zlib is needed at NativeAOT link time (on Rocky 10 zlib-ng replaces zlib and zlib.h comes
 # from the compat package).
 [ -f /usr/include/zlib.h ] || fail \
@@ -83,7 +76,7 @@ if [ -n "$HOST_RID" ] && [ "$RID" != "$HOST_RID" ] && [ "${ALLOW_CROSS:-}" != '1
         'or set ALLOW_CROSS=1 if a cross toolchain and sysroot are already set up.'
 fi
 
-# --- 発行 / Publish ---
+# --- Publish ---
 
 echo "Publishing $RID NativeAOT binary..."
 echo
@@ -92,7 +85,6 @@ dotnet publish Raccoon.RdpProxy/Raccoon.RdpProxy.csproj -c Release -r "$RID" \
 
 [ -f "$BIN" ] || fail "the publish reported success but no binary was found in $OUT."
 
-# 生成物がそのホストで実際に動くかを、ネットワーク不要の自己テストで確認する。
 # Smoke test the artifact with the network-free self test to prove it actually runs here.
 if [ "$RID" = "$HOST_RID" ]; then
     echo

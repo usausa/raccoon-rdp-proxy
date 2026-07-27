@@ -8,20 +8,19 @@ RDP を中継し、**RDP プロトコル内部の `clientAddress`（`TS_EXTENDED
 - RDP プロトコル内の `clientAddress` / `clientName` / 識別情報の書き換え
 - NLA 必須ターゲット向け CredSSP 資格情報ブリッジ（NTLMv2＋pubKeyAuth＋TSCredentials をハンドロール実装）
 - 接続元 IP 制限（CIDR ACL）・複数ターゲットの同時中継
-- 外部ランタイム依存なしの単一バイナリ / NativeAOT に対応
-- ホットパスにログ無しの低アロケーション設計（`Span` / `ArrayPool` / 生 `Socket`）
+- 外部ランタイム依存なしの単一バイナリ
 
 ## 構成
 
 ```
-[クライアント]            [中継Linux (このプロキシ)]                    [ターゲット]
-192.168.100.9  ──▶  192.168.100.99 : 33031  ┐ 自己署名TLSで終端         192.168.50.31:3389
- mstsc(NLA要求)      (デュアルホーム)          │ (クライアント脚=TLSのみ)   (NLA 必須のまま)
-                    192.168.50.254 ───────────┘ CredSSPで認証+書き換え ─▶
-                    (TCP送信元 & CredSSP)
+[クライアント]     [中継Linux (このプロキシ)]                        [ターゲット]
+192.168.1.10  ──▶  192.168.1.20 : 3389   ┐ 自己署名TLSで終端         192.168.2.10:3389
+ mstsc(NLA要求)    (デュアルホーム)      │ (クライアント脚=TLSのみ)  (NLA 必須のまま)
+                   192.168.2.20 ─────────┘ CredSSPで認証+書き換え ─▶
+                   (TCP送信元 & CredSSP)
 ```
 
-目標: **`192.168.50.31` で `WTSClientAddress` が `192.168.50.254` になること。** → 達成。
+目標: **`192.168.2.10` で `WTSClientAddress` が `192.168.2.20` になること。** → 達成。
 
 ## 仕組み
 
@@ -42,150 +41,27 @@ RDP を中継し、**RDP プロトコル内部の `clientAddress`（`TS_EXTENDED
 
 TCP 送信元も `Source` で bind するため、**パケット内 clientAddress と実 TCP 送信元の両方**が指定値になります。
 
-## Requirements
+## 動作要件
 
-- .NET 10 SDK / runtime
 - 中継ホストはターゲットへ到達でき、`Source` に指定する IP が実在すること（デュアルホーム推奨）
-
-## ビルド
-
-```pwsh
-# 開発ビルド
-dotnet build Raccoon.RdpProxy/Raccoon.RdpProxy.csproj -c Release
-```
-
-### Linux 配布バイナリ
-
-Linux 向け成果物の作り方は 3 通りあります。どれも自己完結（リレー機に .NET 不要）で、**成果物の生成のみ**を行います（転送は手動）。
-
-| | `build-aot.sh` | `build-aot.bat` | `build-linux.bat` |
-| --- | --- | --- | --- |
-| ビルドホスト | **Linux**（Rocky Linux 等） | Windows（発行は **WSL**） | **Windows 単体** |
-| コンパイル方式 | NativeAOT（ネイティブコード） | NativeAOT（ネイティブコード） | JIT・単一ファイルバンドル |
-| 出力先 | `publish/aot-linux-x64/` | `publish/aot-linux-x64/` | `publish/linux-x64/` |
-| サイズ | **約 9 MB** | **約 9 MB** | 約 38 MB |
-| 起動速度 / メモリ | 最速 / 最小 | 最速 / 最小 | 劣る（JIT＋起動時展開） |
-| 前提 | .NET SDK＋clang＋zlib ヘッダ | WSL＋左記一式 | Windows の .NET SDK のみ |
-| SELinux `enforcing` | `execmem` 不要 | `execmem` 不要 | `execmem` が要る場合あり（展開＋JIT） |
-
-リレー機が Rocky Linux なら **`build-aot.sh`（A）を推奨**します（リレー機と同系統でビルドするので glibc の食い違いが起きない）。Windows しか無い場合は WSL 経由の `build-aot.bat`（B）、Linux ビルドホストを用意できない場合に `build-linux.bat`（C）。
-
-#### A. Rocky Linux でビルド（build-aot.sh）
-
-**1. 前提パッケージ（初回のみ）**
-
-```bash
-# Rocky Linux 9
-sudo dnf install -y dotnet-sdk-10.0 clang zlib-devel
-
-# Rocky Linux 10（zlib が zlib-ng に置き換わっているため別パッケージ）
-sudo dnf install -y dotnet-sdk-10.0 clang zlib-ng-compat-devel
-```
-
-`clang` と zlib ヘッダは NativeAOT の**リンク**に必要です（[Microsoft の前提条件](https://learn.microsoft.com/ja-jp/dotnet/core/deploying/native-aot/)）。AppStream に `dotnet-sdk-10.0` が来ていない場合（マイナーバージョンが古い等）は Microsoft のスクリプトで導入します:
-
-```bash
-curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel 10.0
-echo 'export PATH="$HOME/.dotnet:$PATH"' >> ~/.bashrc && . ~/.bashrc
-dotnet --list-sdks     # 10.x が出れば OK
-```
-
-**2. ビルド**
-
-```bash
-chmod +x build-aot.sh        # Windows 側から持ち込んだ場合は実行権が落ちていることがある
-./build-aot.sh               # 既定はビルドホストのアーキ（x86_64 → linux-x64）
-./build-aot.sh linux-arm64   # ARM 機上で ARM 向け
-```
-
-発行前に `dotnet` / SDK 10 / `clang` / zlib ヘッダを確認し、発行後に `--selftest`（ネットワーク不要の自己テスト）まで通してから完了します。
-→ `publish/aot-linux-x64/` に `Raccoon.RdpProxy`（約 9 MB）と `appsettings.json`。この 2 つをリレー機へ配置します（→ 常駐運用の systemd）。
-
-> **glibc の互換方向に注意**: NativeAOT バイナリは**ビルドしたホストの glibc 以上**でしか動きません。Rocky 9 でビルド → Rocky 9 / 10 で動作、Rocky 8 では動きません。リレー機が Rocky 8 なら Rocky 8 でビルドします（.NET 10 は RHEL 8 / 9 / 10 系すべてをサポート）。
-
-> 追加の実行時パッケージは通常不要です（グローバリゼーションは `InvariantGlobalization` で無効化済み、OpenSSL は標準で入っている）。`Proxy:CredsspImpl` を `negotiate` にする場合のみ、リレー機に `sudo dnf install -y gssntlmssp` が要ります（既定の `handroll` は依存なし）。
-
-#### B. Windows から WSL 経由（build-aot.bat）
-
-NativeAOT は Windows から Linux 向けにクロスコンパイルできず **Linux ビルドホストが必須**のため、発行自体は **WSL** で実行します。
-
-```bat
-build-aot.bat                 :: linux-x64（既定）
-build-aot.bat linux-arm64     :: ARM リレー向け
-```
-→ `publish/aot-linux-x64/Raccoon.RdpProxy`。`appsettings.json` と一緒にリレー機へコピーします。
-
-> **リレー機が Rocky Linux なら A を使ってください。** WSL のディストロの glibc がリレー機より新しいと（例: Ubuntu 22.04 = glibc 2.35 > Rocky 9 = glibc 2.34）、出来たバイナリがリレー機で `GLIBC_2.35 not found` で起動しないことがあります。
-
-#### C. Windows 単体（build-linux.bat）
-
-自己完結の単一ファイルを **Windows だけ**でクロス発行します（WSL・コンテナ不要）。NativeAOT ではなく JIT ランタイムを同梱する方式なので、OS を跨いだ発行が可能です。
-
-```bat
-build-linux.bat                 :: linux-x64（既定）
-build-linux.bat linux-arm64     :: ARM リレー向け
-```
-→ `publish/linux-x64/Raccoon.RdpProxy`。`appsettings.json` と一緒にリレー機へコピーします。
-
-Windows 側に必要なのは .NET SDK だけです。
-
-#### WSL の初期セットアップ（build-aot.bat 用・初回のみ）
-
-発行は **既定のディストロ**で実行されます。WSL はカレントの Windows ディレクトリを自動的にマウントするため、成果物はこのリポジトリ内に戻ってきます。
-
-```bat
-:: 1. ディストロの導入（既にあれば不要）
-wsl --install -d Ubuntu
-
-:: 2. 既定に設定（build-aot.bat は既定のディストロを使う）
-wsl --set-default Ubuntu
-wsl --list --verbose
-```
-
-続いてディストロ内で、.NET SDK 10 と NativeAOT のリンクに必要なパッケージを導入します:
-
-```bash
-sudo apt update
-sudo apt install -y dotnet-sdk-10.0 clang zlib1g-dev
-```
-
-`dotnet-sdk-10.0` パッケージが無いディストロでは、[Microsoft の導入手順](https://learn.microsoft.com/ja-jp/dotnet/core/install/linux)に従うか、インストールスクリプトを使います:
-
-```bash
-curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel 10.0
-echo 'export PATH="$HOME/.dotnet:$PATH"' >> ~/.bashrc
-```
-
-確認（`build-aot.bat` はこの 2 つを起動時にチェックします）:
-
-```bash
-dotnet --version
-clang --version
-```
-
-> ビルドは `/mnt/...`（drvfs）越しに走るため、Linux ファイルシステム内でのビルドより低速です。頻繁に回すならディストロ側にクローンしてビルドする方が高速です。
-
-> `build-aot.bat` のコメントだけ英語のみです。cmd.exe はバッチファイルをコンソールのコードページで読むため、UTF-8 の日本語が化け、化けたバイトがコマンド区切りとして解釈されて動作しなくなるためです。
-
-なお WSL 内で発行しているのは `build-aot.sh`（A）と同じコマンドです。スクリプトを介さず直接叩く場合:
-```bash
-dotnet publish Raccoon.RdpProxy/Raccoon.RdpProxy.csproj -c Release -r linux-x64 \
-  -p:PublishAot=true -p:StripSymbols=true -o publish/aot-linux-x64
-```
+- 配布バイナリは自己完結のため、**中継ホストに .NET ランタイムは不要**。.NET 10 SDK はソースから実行する（`dotnet run`）場合のみ必要
+- 中継ホストで受付ポートを開放: `sudo firewall-cmd --add-port=3389/tcp`（環境により nftables 等の分離設定も要確認）
 
 ## 実行
 
+```bash
+# 配布バイナリ(カレントディレクトリの appsettings.json を読む)
+./Raccoon.RdpProxy
+```
+
 ```pwsh
-# 既定設定(appsettings.json)で実行
+# ソースから既定設定(appsettings.json)で実行
 dotnet run --project Raccoon.RdpProxy
 
 # 開発(appsettings.Development.json: 127.0.0.1 待受 / Debug ログ)
 $env:DOTNET_ENVIRONMENT = "Development"
 dotnet run --project Raccoon.RdpProxy
 ```
-
-- 受付ポート開放: `sudo firewall-cmd --add-port=33031/tcp`（環境により nftables 等の分離設定も要確認）。
-- `Source` の IP は中継ホストに実在すること。
 
 ## 設定（appsettings.json）
 
@@ -212,34 +88,35 @@ dotnet run --project Raccoon.RdpProxy
   "Proxy": {
     "Listen": "0.0.0.0",
     "Cert": "proxy.pfx",
-    "Source": "192.168.50.254",
-    "ClientAddress": "192.168.50.254",
+    "Source": "192.168.2.20",
+    "ClientAddress": "192.168.2.20",
     "Credentials": { "Domain": "", "User": "Administrator", "Password": "ChangeMe" },
     "Maps": [
-      { "ListenPort": 33031, "Host": "192.168.50.31", "Port": 3389 },
-      { "ListenPort": 33032, "Host": "192.168.50.32", "Port": 3389,
+      { "ListenPort": 3389, "Host": "192.168.2.10", "Port": 3389 },
+      { "ListenPort": 13389, "Host": "192.168.2.11", "Port": 3389,
         "Credentials": { "Domain": "", "User": "Administrator", "Password": "other-pass" } },
-      { "ListenPort": 33033, "Host": "192.168.50.33", "Port": 3389 }
+      { "ListenPort": 23389, "Host": "192.168.2.12", "Port": 3389 }
     ]
   }
 }
 ```
-- 起動ログに各 map の実効値（`src=… clientAddr=… user=DOM\user allow=…`）が出ます。
+- 待受アドレスは共通のため、**`ListenPort` は map ごとに別**にします。例では 1 台目を標準の 3389（ホスト名だけで接続可）、以降を 13389 / 23389 にしています。
+- 起動ログに各 map の実効値（`Map 0.0.0.0:3389 -> 192.168.2.10:3389 src=… clientAddr=… domain=… user=… allow=…`）が出ます。
 - `Password` / `NtHash` が未設定なら CredSSP 無効（TLS 終端のみ＝NLA 無効ターゲット向け）。
 - `Domain`: ローカルアカウントは空 or `.`、ドメインは NetBIOS 名。平文 `Password` の代わりに `NtHash`（MD4(password) の 16byte hex）も指定可。
 
 環境変数やコマンドライン引数でも上書きできます（`--Proxy:ClientAddress=…`、`Proxy__Maps__0__Host=…`、`--Serilog:MinimumLevel:Default=Debug` など）。
 
 ### 接続元 IP 制限（Allow）
-許可した CIDR 以外からの接続は**TLS 前に即拒否**（`接続拒否: 許可IP外` をログ）。未指定/空なら全許可。**map 毎に上書き可**（未指定はグローバルを継承）。
+許可した CIDR 以外からの接続は**TLS 前に即拒否**（`connection rejected (not in allow list).` をログ）。未指定/空なら全許可。**map 毎に上書き可**（未指定はグローバルを継承）。
 ```jsonc
 {
   "Proxy": {
-    "Allow": ["192.168.100.0/24"],
+    "Allow": ["192.168.1.0/24"],
     "Maps": [
-      { "ListenPort": 33031, "Host": "192.168.50.31", "Port": 3389 },
-      { "ListenPort": 33099, "Host": "192.168.50.99", "Port": 3389,
-        "Allow": ["192.168.100.9/32", "192.168.100.10/32"] }
+      { "ListenPort": 3389, "Host": "192.168.2.10", "Port": 3389 },
+      { "ListenPort": 13389, "Host": "192.168.2.13", "Port": 3389,
+        "Allow": ["192.168.1.10/32", "192.168.1.11/32"] }
     ]
   }
 }
@@ -256,14 +133,18 @@ dotnet run --project Raccoon.RdpProxy
 
 ```jsonc
 // (A) clientName と clientAddress "だけ" 書き換え
-{ "Proxy": { "ClientAddress": "192.168.50.254", "ClientName": "RELAY01",
-  "Maps": [ { "ListenPort": 33031, "Host": "192.168.50.31", "Port": 3389 } ] } }
+{ "Proxy": { "ClientAddress": "192.168.2.20", "ClientName": "RELAY01",
+  "Maps": [ { "ListenPort": 3389, "Host": "192.168.2.10", "Port": 3389 } ] } }
 
 // (B) 上記に加えて製品ID・パスも消す(最大限マスク)
-{ "Proxy": { "ClientAddress": "192.168.50.254", "ClientName": "RELAY01", "MaskClientInfo": true,
-  "Maps": [ { "ListenPort": 33031, "Host": "192.168.50.31", "Port": 3389 } ] } }
+{ "Proxy": { "ClientAddress": "192.168.2.20", "ClientName": "RELAY01", "MaskClientInfo": true,
+  "Maps": [ { "ListenPort": 3389, "Host": "192.168.2.10", "Port": 3389 } ] } }
 ```
 **マスクしない項目**（セッション動作/UX に影響するため既定で保持）: `clientBuild`（版）、キーボードレイアウト/IME（ロケール）、`clientTimeZone`（タイムゾーン）、画面解像度。
+
+### 証明書
+- `Cert` 未指定なら起動時に自己署名(10 年)を動的生成。`Cert = proxy.pfx` を指定してファイルが無ければ **初回に 10 年 PFX＋.CER を生成**し、以後は同じファイルを読む（証明書が毎回同じ）。
+- `--make-cert proxy.pfx` で単体生成も可。`.CER` をクライアントの「信頼されたルート」に入れれば mstsc の証明書警告が消えます。
 
 ## ログ
 
@@ -272,23 +153,22 @@ dotnet run --project Raccoon.RdpProxy
 - **`Information`（既定）**: スタートアップ設定とエラー/警告のみ。成功接続は無出力（＝低ボリューム、常駐向き）。
 - **`Debug`**: 接続ごとに各ステップが出る。
   ```
-  CredSSP 認証成功 (user=.\Administrator, impl=handroll)
-  serverSelectedProtocol 書換: SSL -> 0x2 (MCS Connect Initial)
-  clientRequestedProtocols 書換: 0x3 -> 0xB (MCS Connect Response)
-  clientAddress 書換: 192.168.100.9 -> 192.168.50.254
+  [192.168.1.10:52134] CredSSP authenticated (domain= user=Administrator, impl=handroll).
+  [192.168.1.10:52134] serverSelectedProtocol rewritten SSL -> 0x2 (MCS Connect Initial).
+  [192.168.1.10:52134] clientRequestedProtocols rewritten 0x3 -> 0xB (MCS Connect Response).
+  [192.168.1.10:52134] clientAddress rewritten 192.168.1.10 -> 192.168.2.20 (maskClientInfo=False).
   ```
 
 ## 常駐運用
 
 **1 インスタンスで複数ターゲットを捌けます**（`Proxy:Maps` に複数 map・ターゲット別資格情報を記載）。常駐は Windows サービス / systemd / Docker のいずれかで。
 
+（Linux 向けバイナリの生成は `build-linux-aot.sh` / `build-linux-aot.bat` / `build-linux-singlefile.bat`。詳細は各スクリプト冒頭のコメント参照。）
+
 ### Windows サービス
 ```pwsh
-# 発行
-dotnet publish Raccoon.RdpProxy/Raccoon.RdpProxy.csproj -c Release -r win-x64 --self-contained false -o publish
-
 # 登録(要管理者。binPath= の後ろのスペースは必須)
-sc.exe create Raccoon.RdpProxy binPath= "C:\path\to\publish\Raccoon.RdpProxy.exe" start= auto
+sc.exe create Raccoon.RdpProxy binPath= "C:\path\to\Raccoon.RdpProxy.exe" start= auto
 sc.exe start Raccoon.RdpProxy
 
 # 解除
@@ -300,13 +180,13 @@ sc.exe delete Raccoon.RdpProxy
 ### systemd（Linux）
 ```bash
 sudo mkdir -p /opt/rdp-proxy
-sudo cp publish/aot-linux-x64/Raccoon.RdpProxy /opt/rdp-proxy/
-sudo cp publish/aot-linux-x64/appsettings.json /opt/rdp-proxy/    # 複数 map をここに記載
-sudo chmod 600 /opt/rdp-proxy/appsettings.json                    # 資格情報を含むため権限を絞る
+sudo cp Raccoon.RdpProxy /opt/rdp-proxy/
+sudo cp appsettings.json /opt/rdp-proxy/       # 複数 map をここに記載
+sudo chmod 600 /opt/rdp-proxy/appsettings.json # 資格情報を含むため権限を絞る
 sudo cp rdp-proxy.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now rdp-proxy
-journalctl -u rdp-proxy -f                                        # ログ確認
+journalctl -u rdp-proxy -f                     # ログ確認
 ```
 （同梱 [rdp-proxy.service](rdp-proxy.service)。`Type=notify` で待受確立まで待機。`proxy.pfx` は初回に自動生成され `/opt/rdp-proxy` に保存。ディレクトリを変える場合は unit 内の `WorkingDirectory` / `ExecStart` / `ReadWritePaths` を揃えて修正。）
 
@@ -325,7 +205,7 @@ docker build -t raccoon-rdpproxy .
 docker run -d --name raccoon-rdpproxy --restart unless-stopped \
   --network host -v /opt/raccoon-rdpproxy:/cfg raccoon-rdpproxy
 ```
-（同梱 [Dockerfile](Dockerfile) / [docker-compose.yml](docker-compose.yml)。同じ NativeAOT バイナリをソースからビルドするので事前のローカルビルドは不要。`/cfg` の `appsettings.json` / `proxy.pfx` / `Log/` が使われる。）
+（同梱 [Dockerfile](Dockerfile) / [docker-compose.yml](docker-compose.yml)。ソースからバイナリをビルドするので事前のローカルビルドは不要。`/cfg` の `appsettings.json` / `proxy.pfx` / `Log/` が使われる。）
 
 ## 書き換わったことの確認（ターゲットで実行）
 
@@ -349,13 +229,9 @@ public static class Wts {
 '@
 0..15 | % { $a=[Wts]::Addr($_); if($a){ "session {0,-3} user={1,-18} WTSClientAddress={2}" -f $_,[Wts]::User($_),$a } }
 ```
-中継経由で接続後、ここが **192.168.50.254** なら書き換え成功。
+中継経由で接続後、ここが設定した `ClientAddress` になっていれば書き換え成功。
 
-**参考**: イベントビューア(Security 4624 / TerminalServices 1149)の「ソース ネットワーク アドレス」は **TCP 送信元由来**で、`Source` バインドだけで 192.168.50.254 になります（パケット内書き換えとは別系統）。
-
-## 証明書
-- `Cert` 未指定なら起動時に自己署名(10 年)を動的生成。`Cert = proxy.pfx` を指定してファイルが無ければ **初回に 10 年 PFX＋.CER を生成**し、以後は同じファイルを読む（証明書が毎回同じ）。
-- `--make-cert proxy.pfx` で単体生成も可。`.CER` をクライアントの「信頼されたルート」に入れれば mstsc の証明書警告が消えます。
+**参考**: イベントビューア(Security 4624 / TerminalServices 1149)の「ソース ネットワーク アドレス」は **TCP 送信元由来**で、`Source` バインドだけで反映されます（パケット内書き換えとは別系統）。
 
 ## 診断ツール（CLI モード）
 
@@ -363,7 +239,7 @@ public static class Wts {
 
 - **`--credssp-probe HOST:PORT`**: mstsc 不要で **CredSSP 認証だけを検証**（TCP→X.224→TLS→CredSSP）。資格情報の妥当性・接続性の切り分けに。
   ```bash
-  ./Raccoon.RdpProxy --credssp-probe 192.168.50.31:3389 --user Administrator --password 'pw' --domain ''
+  ./Raccoon.RdpProxy --credssp-probe 192.168.2.10:3389 --user Administrator --password 'pw' --domain ''
   ```
   `★ CredSSP 認証成功` か `× … errorCode=0xC000006D`(=パスワード不一致) 等で判定。
 - **`--credssp-impl handroll|negotiate`**: 既定は依存なしの `handroll`。`negotiate` は .NET 標準 SSPI（Linux は `gss-ntlmssp` 要）。ハンドロールが SSPI と等価であることは検証済みなので通常は既定でよい。
@@ -371,25 +247,9 @@ public static class Wts {
 - **`--selftest`**: 自己テスト（プロトコル書き換え・NTLM 暗号ベクタ・CredSSP DER）。
 - **`--e2etest`**: 結合テスト（疑似クライアント↔実サービス↔疑似バックエンドで clientAddress 書き換えを全経路検証）。
 
-## 検証状況
-- **実 Windows NLA サーバで CredSSP 認証成功・RDP 接続確立を確認済み**（handroll 実装、複数ホスト）。
-- 自動テスト `--selftest`（全緑）:
-  - clientAddress 書き換え（長さ再計算・末尾保全）
-  - MCS `serverSelectedProtocol` / `clientRequestedProtocols` 書き換え（オフセット検証）
-  - clientName/productId マスク・clientDir マスク
-  - **NTLM 暗号を MS-NLMP 4.2.4 公式ベクタで検証**（MD4/NTOWFv2/NTProofStr/SessionBaseKey/鍵交換/封印）
-  - CredSSP DER 往復
-- `--e2etest`: TLS 終端＋clientAddress 書き換えの全経路。
-
 ## 制限・セキュリティ
 - RDP を復号して中継する実質的な MITM です。**自身のインフラでの利用**が前提。
 - **接続元 IP 制限（`Allow`）**で受付を絞れます（許可外は TLS 前に即拒否）。ファイアウォールと併用推奨。
 - 資格情報は `appsettings.json` に置きます。`chmod 600` で権限を絞るか `NtHash` の使用を推奨。
 - Kerberos は対象外（IP 接続で NTLM に倒れる前提）。標準 RDP セキュリティ(RC4)も対象外。
 - クライアント脚は NLA を SSL に落とします。mstsc 側の「サーバ認証」ポリシーが厳格だと接続不可の場合あり（既定は接続可）。
-
-## 実装メモ
-- **CredSSP の pubKeyAuth は PKCS#1 RSAPublicKey**（.NET `GetRSAPublicKey().ExportRSAPublicKey()`、OpenSSL `i2d_PublicKey`、pyspnego `PublicFormat.PKCS1` 相当）を使う。**SubjectPublicKeyInfo ではない**（間違えると NEGOTIATE/CHALLENGE は通るが AUTHENTICATE 後にサーバが切断）。`CredSspKey.FromCertificate` に集約。
-- PDU パース/再構築は `ReadOnlySpan<byte>` + `BinaryPrimitives`、出力は単一バッファへ直書き。
-- 転送・フレーミングは `ArrayPool<byte>`、DER/NTLM/ネゴ PDU 生成は `stackalloc`。X.224 署名判定は `Unsafe`+`MemoryMarshal`。GC はワークステーション同時 GC＋TieredPGO。
-- NTLMv2/RC4/MD4/CredSSP は外部依存なしのハンドロール実装。

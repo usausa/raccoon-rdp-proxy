@@ -3,7 +3,7 @@ namespace Raccoon.RdpProxy.Security;
 using System.Linq;
 
 // Allow list of source IPs (CIDR). Empty means allow all. Supports both IPv4 and IPv6.
-// Examples: "192.168.100.9", "192.168.100.0/24", "10.0.0.0/8"
+// Examples: "192.168.1.10", "192.168.1.0/24", "172.16.0.0/12"
 internal sealed class IpAcl
 {
     private readonly List<(byte[] Net, int Prefix, AddressFamily Af)> rules = [];

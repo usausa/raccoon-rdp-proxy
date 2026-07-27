@@ -9,18 +9,24 @@ rem  Linux build host - so the publish itself runs in WSL. This script only
 rem  produces the artifact; copy it to the relay host yourself.
 rem
 rem  One-time setup in the default WSL distro:
-rem    wsl --set-default Ubuntu
+rem    wsl --install -d Ubuntu       (skip if a distro is already installed)
+rem    wsl --set-default Ubuntu      (the publish runs in the DEFAULT distro)
 rem    sudo apt update
-rem    sudo apt install -y clang zlib1g-dev
-rem    plus the .NET SDK 10 (dotnet --version)
-rem  See README.md / README.ja.md for the full setup steps.
+rem    sudo apt install -y dotnet-sdk-10.0 clang zlib1g-dev
+rem  If the distro has no dotnet-sdk-10.0 package, install the SDK with
+rem  Microsoft's script from https://dot.net/v1/dotnet-install.sh -- channel
+rem  10.0 -- and put $HOME/.dotnet on PATH.
+rem  Verify with: dotnet --version / clang --version
+rem
+rem  If the relay host runs Rocky Linux, prefer build-linux-aot.sh on the relay
+rem  side family: a binary built on a distro with a newer glibc than the relay
+rem  will not start there (GLIBC_x.yz not found).
 rem
 rem  NOTE: comments are English only on purpose. cmd.exe reads batch files in
 rem  the console code page, so UTF-8 Japanese would be mangled and the mangled
 rem  bytes can be parsed as command separators.
-rem  The Japanese description lives in README.ja.md instead.
 rem
-rem  Usage  : build-aot.bat [linux-x64^|linux-arm64]
+rem  Usage  : build-linux-aot.bat [linux-x64^|linux-arm64]
 rem  Output : publish/aot-linux-x64/Raccoon.RdpProxy
 rem ============================================================
 
@@ -54,7 +60,7 @@ goto :end
 
 :nowsl
 echo [ERROR] wsl not found. NativeAOT needs a Linux build host.
-echo Install WSL, then set up the distro as described in README.md.
+echo Install WSL, then set up the distro as described at the top of this script.
 exit /b 1
 
 :nodotnet

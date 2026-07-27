@@ -48,12 +48,12 @@ internal static class SelfTestRunner
         var tail = BuildTail();
         var pdu = BuildClientInfoPdu("192.168.10.11", tail);
 
-        var outp = ClientInfoRewriter.TryRewrite(pdu, "10.13.8.100", false, out var old);
+        var outp = ClientInfoRewriter.TryRewrite(pdu, "192.168.2.2", false, out var old);
         Assert(outp is not null, "rewrite returned null");
         Assert(old == "192.168.10.11", $"old address mismatch: {old}");
 
         ClientInfoRewriter.TryRewrite(outp!, "X", false, out var now);
-        Assert(now == "10.13.8.100", $"new address not applied: {now}");
+        Assert(now == "192.168.2.2", $"new address not applied: {now}");
 
         var tpktLen = (outp![2] << 8) | outp[3];
         Assert(tpktLen == outp.Length, $"TPKT length mismatch {tpktLen} != {outp.Length}");
@@ -105,7 +105,7 @@ internal static class SelfTestRunner
     {
         var tail = BuildTail();
         var pdu = BuildClientInfoPdu("192.168.10.11", tail);
-        var outp = ClientInfoRewriter.TryRewrite(pdu, "10.13.8.100", true, out _);
+        var outp = ClientInfoRewriter.TryRewrite(pdu, "192.168.2.2", true, out _);
         Assert(outp is not null, "null");
 
         var got = ExtractTail(outp!);
@@ -149,14 +149,14 @@ internal static class SelfTestRunner
     private static void TestIpAcl()
     {
         Assert(IpAcl.Parse([]).IsAllowed(IPAddress.Parse("8.8.8.8")), "empty ACL should allow all");
-        var acl = IpAcl.Parse(["192.168.100.0/24", "10.13.8.5", "172.16.0.0/12"]);
-        Assert(acl.IsAllowed(IPAddress.Parse("192.168.100.9")), "192.168.100.9 should be allowed");
-        Assert(!acl.IsAllowed(IPAddress.Parse("192.168.101.9")), "192.168.101.9 should be denied");
-        Assert(acl.IsAllowed(IPAddress.Parse("10.13.8.5")), "10.13.8.5/32 should be allowed");
-        Assert(!acl.IsAllowed(IPAddress.Parse("10.13.8.6")), "10.13.8.6 should be denied");
+        var acl = IpAcl.Parse(["192.168.1.0/24", "192.168.3.10", "172.16.0.0/12"]);
+        Assert(acl.IsAllowed(IPAddress.Parse("192.168.1.10")), "192.168.1.10 should be allowed");
+        Assert(!acl.IsAllowed(IPAddress.Parse("192.168.2.10")), "192.168.2.10 should be denied");
+        Assert(acl.IsAllowed(IPAddress.Parse("192.168.3.10")), "192.168.3.10/32 should be allowed");
+        Assert(!acl.IsAllowed(IPAddress.Parse("192.168.3.11")), "192.168.3.11 should be denied");
         Assert(acl.IsAllowed(IPAddress.Parse("172.20.1.1")), "172.20.1.1/12 should be allowed");
         Assert(!acl.IsAllowed(null), "null should be denied");
-        Assert(acl.IsAllowed(IPAddress.Parse("::ffff:192.168.100.9")), "IPv4-mapped should be allowed");
+        Assert(acl.IsAllowed(IPAddress.Parse("::ffff:192.168.1.10")), "IPv4-mapped should be allowed");
     }
 
     private static void TestNtlmVectors()

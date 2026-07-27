@@ -17,7 +17,7 @@ internal static class E2ETest
 {
     public static async Task<int> RunAsync()
     {
-        const string writeAddr = "10.13.8.100";
+        const string writeAddr = "192.168.2.2";
         const string clientOrigAddr = "192.168.10.11";
 
         using var cert = CertificateFactory.LoadOrCreate(null, null, out _);

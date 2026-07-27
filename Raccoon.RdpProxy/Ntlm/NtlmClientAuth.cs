@@ -37,7 +37,7 @@ internal sealed class NtlmClientAuth : ICredSspAuth
 
     public byte[] ProcessChallenge(byte[] challenge, string spn) => ProcessChallengeAndBuildAuthenticate(challenge, spn);
 
-    // Type 1: NEGOTIATE_MESSAGE Signature(8)+Type(4)+Flags(4)+DomainFields(8)+WorkstationFields(8)+Version(8)=40。
+    // Type 1: NEGOTIATE_MESSAGE Signature(8)+Type(4)+Flags(4)+DomainFields(8)+WorkstationFields(8)+Version(8)=40.
     public byte[] BuildNegotiate()
     {
         var flags = NtlmFlags.Unicode | NtlmFlags.RequestTarget | NtlmFlags.Ntlm |
@@ -50,12 +50,12 @@ internal sealed class NtlmClientAuth : ICredSspAuth
         BinaryPrimitives.WriteUInt32LittleEndian(m.AsSpan(12), (uint)flags);
 
         // DomainNameFields(16-23)=0, WorkstationFields(24-31)=0
-        WriteVersion(m.AsSpan(32)); // Version は offset 32 / Version is at offset 32
+        WriteVersion(m.AsSpan(32)); // Version is at offset 32
         negotiateMsg = m;
         return m;
     }
 
-    // Type 3: build AUTHENTICATE (spn example: "TERMSRV/192.168.50.31").
+    // Type 3: build AUTHENTICATE (spn example: "TERMSRV/192.168.2.10").
     public byte[] ProcessChallengeAndBuildAuthenticate(byte[] challengeMsg, string spn)
     {
         var ch = ParseChallenge(challengeMsg);
@@ -256,7 +256,6 @@ internal sealed class NtlmClientAuth : ICredSspAuth
             p += 4 + len;
         }
 
-        // MsvAvFlags(0x06) に 0x00000002 (MIC present)
         // Set 0x00000002 (MIC present) in MsvAvFlags(0x06)
         var fi = pairs.FindIndex(static x => x.Id == 0x0006);
         var flagVal = fi >= 0 ? pairs[fi].Val : new byte[4];
