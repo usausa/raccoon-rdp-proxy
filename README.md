@@ -1,7 +1,5 @@
 # Raccoon.RdpProxy
 
-**English** | [日本語](README.ja.md)
-
 A relay proxy that **rewrites the `clientAddress` inside the RDP protocol itself** (`TS_EXTENDED_INFO_PACKET`, in the Client Info PDU) and re-establishes the session against a different host. For targets that require NLA (Network Level Authentication), it authenticates through a **hand-rolled CredSSP credential bridge**. **Verified against a real Windows NLA server.**
 
 - .NET 10 / Worker service (Windows service / systemd daemon)
@@ -46,22 +44,6 @@ The TCP source is also bound via `Source`, so **both the in-packet clientAddress
 - The relay host must be able to reach the target, and the IP given in `Source` must actually exist on it (dual-homing recommended)
 - The published binary is self-contained, so **no .NET runtime is needed on the relay host**. The .NET 10 SDK is only needed to run from source (`dotnet run`)
 - Open the listen port on the relay: `sudo firewall-cmd --add-port=3389/tcp` (depending on the environment, check separate nftables etc. settings too)
-
-## Run
-
-```bash
-# The published binary (reads appsettings.json from the current directory)
-./Raccoon.RdpProxy
-```
-
-```pwsh
-# From source, with the default settings (appsettings.json)
-dotnet run --project Raccoon.RdpProxy
-
-# Development (appsettings.Development.json: listen on 127.0.0.1 / Debug logging)
-$env:DOTNET_ENVIRONMENT = "Development"
-dotnet run --project Raccoon.RdpProxy
-```
 
 ## Configuration (appsettings.json)
 
@@ -145,19 +127,6 @@ Identity fields other than `ClientAddress` (IP) can also be rewritten. **Two ind
 ### Certificates
 - If `Cert` is unspecified, a self-signed (10-year) certificate is generated dynamically at startup. If you specify `Cert = proxy.pfx` and the file does not exist, a **10-year PFX + .CER is generated on first run** and the same file is read thereafter (so the certificate stays constant).
 - `--make-cert proxy.pfx` generates one standalone. Import the `.CER` into the client's "Trusted Root" to silence the mstsc certificate warning.
-
-## Logging
-
-Logging uses Serilog (the `Serilog` section, Console + File sinks). **There is no logging on the hot path** (per-packet forwarding); everything is per-connection. Log volume is tuned with `Serilog:MinimumLevel:Default`.
-
-- **`Information` (default)**: startup settings and errors/warnings only. Successful connections produce no output (= low volume, suited to running as a resident service).
-- **`Debug`**: each step is emitted per connection.
-  ```
-  [192.168.1.10:52134] CredSSP authenticated (domain= user=Administrator, impl=handroll).
-  [192.168.1.10:52134] serverSelectedProtocol rewritten SSL -> 0x2 (MCS Connect Initial).
-  [192.168.1.10:52134] clientRequestedProtocols rewritten 0x3 -> 0xB (MCS Connect Response).
-  [192.168.1.10:52134] clientAddress rewritten 192.168.1.10 -> 192.168.2.20 (maskClientInfo=False).
-  ```
 
 ## Running as a resident service
 

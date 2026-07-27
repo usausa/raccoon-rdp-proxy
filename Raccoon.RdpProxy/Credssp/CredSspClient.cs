@@ -9,7 +9,7 @@ internal sealed class CredSspClient
     private const int CredSspVersion = 6;
 
     private readonly ICredSspAuth auth;
-    private readonly byte[] serverPublicKey; // サーバ TLS 証明書の PKCS#1 RSAPublicKey / PKCS#1 RSAPublicKey of the server TLS certificate
+    private readonly byte[] serverPublicKey; // PKCS#1 RSAPublicKey of the server TLS certificate
     private readonly string spn;
     private readonly string domain;
     private readonly string user;

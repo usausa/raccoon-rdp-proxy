@@ -119,7 +119,7 @@ internal static class ClientInfoRewriter
         // Determine the output size first, then write straight into a single buffer
         var newAddrChars = Encoding.Unicode.GetByteCount(newAddress);
         var newCb = newAddrChars + 2; // + 2byte NUL
-        var headLen = addrFamilyPos - infoStart; // CodePage..5文字列 (不変) / CodePage..the 5 strings (unchanged)
+        var headLen = addrFamilyPos - infoStart; // CodePage..the 5 strings (unchanged)
 
         // tail body: when masking, cbClientDir=2 + NUL(2) + [clientDirEnd..len]; otherwise [addrEnd..len]
         var tailBodyLen = doMaskDir ? (4 + (len - clientDirEnd)) : (len - addrEnd);
