@@ -12,8 +12,7 @@ using Raccoon.RdpProxy.Protocol;
 using Raccoon.RdpProxy.Security;
 using Raccoon.RdpProxy.Settings;
 
-// RDP 中継の本体。map ごとにリスナーを張り、TLS を両脚で終端して clientAddress 等を書き換える。
-// Core of the RDP relay. Opens a listener per map, terminates TLS on both legs, and rewrites clientAddress and friends.
+// Core of the RDP relay. Opens a listener per map, terminates TLS on both legs, and rewrites clientAddress and friends
 internal sealed class RdpProxyService : BackgroundService
 {
     private const int MaxFrame = 64 * 1024;
@@ -93,8 +92,7 @@ internal sealed class RdpProxyService : BackgroundService
         }
         catch (SocketException)
         {
-            // プラットフォーム差は無視
-            // Ignore platform differences.
+            // Ignore platform differences
         }
     }
 
@@ -306,23 +304,21 @@ internal sealed class RdpProxyService : BackgroundService
         CancellationToken ct)
     {
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        var ctob = PumpClientToBackendAsync(peer, client, backend, clientAddress, clientName, maskClientInfo, backendSelected, linked.Token);
-        var btoc = PumpBackendToClientAsync(peer, backend, client, clientRequested, backendRequested, linked.Token);
-        await Task.WhenAny(ctob, btoc).ConfigureAwait(false);
+        var clientToBackend = PumpClientToBackendAsync(peer, client, backend, clientAddress, clientName, maskClientInfo, backendSelected, linked.Token);
+        var backendToClient = PumpBackendToClientAsync(peer, backend, client, clientRequested, backendRequested, linked.Token);
+        await Task.WhenAny(clientToBackend, backendToClient).ConfigureAwait(false);
         await linked.CancelAsync().ConfigureAwait(false);
         try
         {
-            await Task.WhenAll(ctob, btoc).ConfigureAwait(false);
+            await Task.WhenAll(clientToBackend, backendToClient).ConfigureAwait(false);
         }
         catch (Exception e) when (IsExpectedConnectionError(e) || (e is OperationCanceledException))
         {
-            // 相手側の切断は無視
-            // Ignore a disconnect on the peer side.
+            // Ignore a disconnect on the peer side
         }
     }
 
-    // backend -> client: 最初の PDU(MCS Connect Response) の clientRequestedProtocols を書き換え、以降は生転送。
-    // backend -> client: rewrite clientRequestedProtocols in the first PDU (MCS Connect Response), then relay raw.
+    // backend -> client: rewrite clientRequestedProtocols in the first PDU (MCS Connect Response), then relay raw
     private async Task PumpBackendToClientAsync(string peer, SslStream backend, SslStream client, uint clientRequested, uint backendRequested, CancellationToken ct)
     {
         var hdr = new byte[4];
@@ -365,8 +361,7 @@ internal sealed class RdpProxyService : BackgroundService
         await CopyAsync(backend, client, ct).ConfigureAwait(false);
     }
 
-    // client -> backend: Client Info PDU を見つけるまでフレーミングし、書き換え後は生転送に降格。
-    // client -> backend: keep framing until the Client Info PDU is found, then fall back to raw relay after rewriting.
+    // client -> backend: keep framing until the Client Info PDU is found, then fall back to raw relay after rewriting
     private async Task PumpClientToBackendAsync(string peer, SslStream client, SslStream backend, string clientAddress, string? clientName, bool maskClientInfo, uint backendProto, CancellationToken ct)
     {
         var hdr = new byte[4];
@@ -408,7 +403,7 @@ internal sealed class RdpProxyService : BackgroundService
                 }
                 catch (InvalidDataException e)
                 {
-                    handled = true; // Info PDU だが解析失敗 → 原文転送して以降は生転送 / Info PDU but parsing failed -> forward as-is and relay raw from here on
+                    handled = true; // Info PDU but parsing failed -> forward as-is and relay raw from here on
                     logger.WarnClientInfoParseFailed(peer, e.Message);
                 }
 
@@ -471,8 +466,7 @@ internal sealed class RdpProxyService : BackgroundService
         }
         catch (Exception e) when (IsExpectedConnectionError(e) || (e is OperationCanceledException))
         {
-            // 相手側の切断
-            // Disconnect on the peer side.
+            // Disconnect on the peer side
         }
         finally
         {
