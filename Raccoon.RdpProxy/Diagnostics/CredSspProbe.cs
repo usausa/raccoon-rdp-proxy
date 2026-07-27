@@ -8,8 +8,7 @@ using Raccoon.RdpProxy.Credssp;
 using Raccoon.RdpProxy.Helpers;
 using Raccoon.RdpProxy.Protocol;
 
-// 指定ホストへバックエンド脚だけ実行して CredSSP 認証を検証するプローブ (mstsc 不要)。
-// Probe that runs only the backend leg against the given host to verify CredSSP authentication (no mstsc needed).
+// Probe that runs only the backend leg against the given host to verify CredSSP authentication (no mstsc needed)
 //   --credssp-probe HOST:PORT --user U --password P --domain D [--credssp-impl handroll|negotiate]
 internal static class CredSspProbe
 {
@@ -83,8 +82,8 @@ internal static class CredSspProbe
         var auth = CredSspAuthFactory.Create(impl, domain, user, password, null, spn);
         try
         {
-            var credssp = new CredSspClient(auth, spki, spn, domain, user, password);
-            await credssp.RunAsync(tls, Console.WriteLine, default).ConfigureAwait(false);
+            var credSsp = new CredSspClient(auth, spki, spn, domain, user, password);
+            await credSsp.RunAsync(tls, Console.WriteLine, default).ConfigureAwait(false);
             Console.WriteLine($"* CredSSP authenticated (impl={impl}) - credentials and implementation OK");
             return 0;
         }
@@ -103,7 +102,7 @@ internal static class CredSspProbe
     {
         for (var i = 0; i < (args.Length - 1); i++)
         {
-            if (string.Equals(args[i], name, StringComparison.Ordinal))
+            if (String.Equals(args[i], name, StringComparison.Ordinal))
             {
                 return args[i + 1];
             }

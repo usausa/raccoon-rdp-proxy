@@ -67,7 +67,7 @@ internal sealed class RdpProxyService : BackgroundService
                 map.ClientAddress ?? settings.ClientAddress,
                 cred.Domain,
                 cred.User,
-                allow.Length == 0 ? "(all)" : string.Join(",", allow));
+                allow.Length == 0 ? "(all)" : String.Join(",", allow));
             listeners.Add(RunListenerAsync(map, cert, stoppingToken));
         }
 
@@ -153,7 +153,7 @@ internal sealed class RdpProxyService : BackgroundService
         var clientName = map.ClientName ?? settings.ClientName;
         var maskClientInfo = map.MaskClientInfo ?? settings.MaskClientInfo;
         var cred = map.Credentials ?? settings.Credentials;
-        var useCredSsp = !string.IsNullOrEmpty(cred.Password) || !string.IsNullOrEmpty(cred.NtHash);
+        var useCredSsp = !String.IsNullOrEmpty(cred.Password) || !String.IsNullOrEmpty(cred.NtHash);
 
         using (client)
         {

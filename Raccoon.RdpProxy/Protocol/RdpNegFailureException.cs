@@ -1,7 +1,6 @@
 namespace Raccoon.RdpProxy.Protocol;
 
-// サーバが RDP Negotiation を FAILURE で返したときの例外。
-// Exception thrown when the server returns an RDP Negotiation FAILURE.
+// Exception thrown when the server returns an RDP Negotiation FAILURE
 internal sealed class RdpNegFailureException : Exception
 {
     public RdpNegFailureException(uint code)

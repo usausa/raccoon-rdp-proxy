@@ -2,8 +2,7 @@ namespace Raccoon.RdpProxy.Credssp;
 
 using Raccoon.RdpProxy.Helpers;
 
-// 最小限の DER エンコード/デコード (CredSSP TSRequest 用)。
-// Minimal DER encoding/decoding (for the CredSSP TSRequest).
+// Minimal DER encoding/decoding (for the CredSSP TSRequest)
 internal static class Der
 {
     // ReSharper disable IntVariableOverflowInUncheckedContext
@@ -76,8 +75,7 @@ internal static class Der
         return c;
     }
 
-    // pos 位置の TLV を読み、(tag, 内容の開始, 内容長, 次の位置) を返す。
-    // Reads the TLV at position pos and returns (tag, content start, content length, next position).
+    // Reads the TLV at position pos and returns (tag, content start, content length, next position)
     public static (byte Tag, int ContentStart, int ContentLen, int Next) ReadTlv(ReadOnlySpan<byte> b, int pos)
     {
         var tag = b[pos];
@@ -96,8 +94,7 @@ internal static class Der
         return (tag, p, len, p + len);
     }
 
-    // SEQUENCE の内容内から context タグ [n] の内容 span を探す。
-    // Searches the SEQUENCE content for the content span of context tag [n].
+    // Searches the SEQUENCE content for the content span of context tag [n]
     public static ReadOnlySpan<byte> FindContext(ReadOnlySpan<byte> seqContent, int n)
     {
         var want = (byte)(0xA0 | n);
@@ -116,8 +113,7 @@ internal static class Der
         return default;
     }
 
-    // ストリームから DER オブジェクト1個(tag+length+content)を読み取る。
-    // Reads one DER object (tag+length+content) from the stream.
+    // Reads one DER object (tag+length+content) from the stream
     public static async Task<byte[]> ReadObjectAsync(Stream s, CancellationToken ct)
     {
         var tl = new byte[2];

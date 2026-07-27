@@ -3,18 +3,15 @@ namespace Raccoon.RdpProxy.Helpers;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
-// 証明書の読み込み結果。Path は使用したファイル(なければ null)、Created は新規生成したか。
-// Result of loading a certificate. Path is the file used (null if none), Created tells whether it was newly generated.
+// Result of loading a certificate
+// Path is the file used (null if none), Created tells whether it was newly generated
 internal readonly record struct CertificateLoadResult(string? Path, bool Created);
 
-// サーバ証明書の読み込み/生成。
-// Loading / generation of the server certificate.
+// Loading / generation of the server certificate
 internal static class CertificateFactory
 {
-    // certPath 指定時: 既存があれば読む。無ければ 10 年物を生成して保存し、以後は同じものを読む。
-    // certPath 未指定: 毎回メモリ内に動的生成。created が true のときは新規生成。
-    // certPath given: load the existing file if present; otherwise generate a 10-year certificate, save it, and reuse it afterwards.
-    // certPath omitted: generate one in memory every time. created is true when a new certificate was generated.
+    // certPath given: load the existing file if present; otherwise generate a 10-year certificate, save it, and reuse it
+    // certPath omitted: generate one in memory every time, created is true when a new certificate was generated
     public static X509Certificate2 LoadOrCreate(string? certPath, string? certPassword, out CertificateLoadResult result)
     {
         if (certPath is not null)
@@ -34,8 +31,7 @@ internal static class CertificateFactory
             }
             catch (IOException)
             {
-                // .cer 併記は任意
-                // Writing the companion .cer is optional.
+                // Writing the companion .cer is optional
             }
 
             result = new CertificateLoadResult(certPath, true);
@@ -47,8 +43,7 @@ internal static class CertificateFactory
         return X509CertificateLoader.LoadPkcs12(tmp.Export(X509ContentType.Pfx), null);
     }
 
-    // 配布用に PFX(秘密鍵入り) と CER(公開鍵/クライアント信頼用) を書き出す。
-    // Write out a PFX (with private key) and a CER (public key, for the client to trust) for distribution.
+    // Write out a PFX (with private key) and a CER (public key, for the client to trust) for distribution
     public static X509Certificate2 MakeFile(string pfxPath, out string cerPath)
     {
         var cert = CreateSelfSigned10Y();
@@ -58,8 +53,7 @@ internal static class CertificateFactory
         return cert;
     }
 
-    // 有効期限10年の自己署名証明書(serverAuth)を生成。
-    // Generate a self-signed certificate (serverAuth) valid for 10 years.
+    // Generate a self-signed certificate (serverAuth) valid for 10 years
     private static X509Certificate2 CreateSelfSigned10Y()
     {
         using var rsa = RSA.Create(2048);

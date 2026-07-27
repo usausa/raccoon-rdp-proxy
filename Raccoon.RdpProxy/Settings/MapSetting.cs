@@ -1,7 +1,6 @@
 namespace Raccoon.RdpProxy.Settings;
 
-// 受付ポート -> ターゲット の 1 マッピング。source/clientAddress/資格情報/allow を上書き可能。
-// One listen-port -> target mapping. source/clientAddress/credentials/allow can be overridden.
+// One listen-port -> target mapping, source/clientAddress/credentials/allow can be overridden
 internal sealed class MapSetting
 {
     public int ListenPort { get; set; }

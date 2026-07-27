@@ -2,8 +2,6 @@ namespace Raccoon.RdpProxy.Security;
 
 using System.Linq;
 
-// 接続元IPの許可リスト(CIDR)。空なら全許可。IPv4/IPv6 両対応。
-// 例: "192.168.100.9", "192.168.100.0/24", "10.0.0.0/8"
 // Allow list of source IPs (CIDR). Empty means allow all. Supports both IPv4 and IPv6.
 // Examples: "192.168.100.9", "192.168.100.0/24", "10.0.0.0/8"
 internal sealed class IpAcl
@@ -50,7 +48,7 @@ internal sealed class IpAcl
     {
         if (rules.Count == 0)
         {
-            return true; // ACL 無し = 全許可 / no ACL = allow all
+            return true; // No ACL = allow all
         }
 
         if (ip is null)
@@ -60,7 +58,7 @@ internal sealed class IpAcl
 
         if (ip.IsIPv4MappedToIPv6)
         {
-            ip = ip.MapToIPv4(); // ::ffff:a.b.c.d を IPv4 に正規化 / normalize ::ffff:a.b.c.d to IPv4
+            ip = ip.MapToIPv4(); // Normalize ::ffff:a.b.c.d to IPv4
         }
 
         var a = ip.GetAddressBytes();
@@ -80,9 +78,7 @@ internal sealed class IpAcl
         return false;
     }
 
-    public string Describe() => rules.Count == 0
-        ? "(all)"
-        : string.Join(",", rules.Select(static r => $"{new IPAddress(r.Net)}/{r.Prefix}"));
+    public string Describe() => rules.Count == 0 ? "(all)" : String.Join(",", rules.Select(static r => $"{new IPAddress(r.Net)}/{r.Prefix}"));
 
     private static bool Match(byte[] a, byte[] net, int prefix)
     {

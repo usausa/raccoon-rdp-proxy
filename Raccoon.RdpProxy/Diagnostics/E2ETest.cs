@@ -12,10 +12,7 @@ using Raccoon.RdpProxy.Protocol;
 using Raccoon.RdpProxy.Server;
 using Raccoon.RdpProxy.Settings;
 
-// 疑似クライアント -> プロキシ(実サービス) -> 疑似バックエンド を流し、
-// バックエンドが受け取った Client Info PDU の clientAddress が書き換わっているか確認する。
-// Drives fake client -> proxy (real service) -> fake backend, and verifies that the clientAddress
-// in the Client Info PDU received by the backend has been rewritten.
+// Drives fake client -> proxy (real service) -> fake backend, and verifies that the clientAddress in the Client Info PDU received by the backend has been rewritten
 internal static class E2ETest
 {
     public static async Task<int> RunAsync()
@@ -69,7 +66,7 @@ internal static class E2ETest
         }
         catch (Exception e) when (e is IOException or SocketException or AuthenticationException or OperationCanceledException)
         {
-            // ignore
+            // Ignore
         }
 
         Console.WriteLine();

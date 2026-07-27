@@ -1,11 +1,9 @@
 namespace Raccoon.RdpProxy.Helpers;
 
-// ストリーム読み取りの共有ヘルパ。
-// Shared helpers for reading from streams.
+// Shared helpers for reading from streams
 internal static class StreamHelper
 {
-    // count バイトを確実に読む。EOF で false。
-    // Read exactly count bytes. Returns false on EOF.
+    // Read exactly count bytes, Returns false on EOF
     public static async Task<bool> ReadFullAsync(Stream s, byte[] buffer, int offset, int count, CancellationToken ct)
     {
         var read = 0;
@@ -23,8 +21,7 @@ internal static class StreamHelper
         return true;
     }
 
-    // TPKT (03 00 <len:2 BE> ...) を 1 つ読む。EOF/不正なら null。
-    // Read a single TPKT (03 00 <len:2 BE> ...). Returns null on EOF or on a malformed packet.
+    // Read a single TPKT (03 00 <len:2 BE> ...), Returns null on EOF or on a malformed packet
     public static async Task<byte[]?> ReadTpktAsync(Stream s, CancellationToken ct)
     {
         var header = new byte[4];

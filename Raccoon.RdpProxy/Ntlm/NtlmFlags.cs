@@ -1,6 +1,6 @@
 namespace Raccoon.RdpProxy.Ntlm;
 
-// NTLM negotiate flags (MS-NLMP 2.2.2.5)。
+// NTLM negotiate flags (MS-NLMP 2.2.2.5)
 [Flags]
 internal enum NtlmFlags : uint
 {

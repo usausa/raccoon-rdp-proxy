@@ -2,17 +2,12 @@ namespace Raccoon.RdpProxy.Protocol;
 
 using System.Text;
 
-// MCS Connect Initial 内 clientCoreData(TS_UD_CS_CORE) の書き換え。
-// クライアント脚を SSL に落としているため serverSelectedProtocol が SSL のまま残る。
-// バックエンドが選択した HYBRID に合わせないとダウングレード検知で RST される。
-// clientName/clientDigProductId のマスクも同ブロックで行う。いずれも同サイズの in-place 書き換え。
-// Rewrites clientCoreData (TS_UD_CS_CORE) inside the MCS Connect Initial.
+// Rewrites clientCoreData (TS_UD_CS_CORE) inside the MCS Connect Initial
 // Because the client leg is downgraded to SSL, serverSelectedProtocol stays SSL;
-// it must be aligned to the HYBRID the backend selected, or a downgrade is detected and RST is sent.
-// Masking of clientName/clientDigProductId happens in the same block. All are same-size in-place rewrites.
+// it must be aligned to the HYBRID the backend selected, or a downgrade is detected and RST is sent
+// Masking of clientName/clientDigProductId happens in the same block. All are same-size in-place rewrites
 internal static class McsConnectInitial
 {
-    // CS_CORE ブロック先頭からの serverSelectedProtocol オフセット
     // serverSelectedProtocol offset from the start of the CS_CORE block
     // header(4) + version(4)+w(2)+h(2)+color(2)+sas(2)+kbl(4)+build(4)+name(32)
     //  + kbType(4)+kbSub(4)+kbFn(4)+ime(64)+postBeta2(2)+prodId(2)+serial(4)+highColor(2)
@@ -20,9 +15,8 @@ internal static class McsConnectInitial
     private const int SspOffsetInBlock = 212;
     private const int MinBlockLen = SspOffsetInBlock + 4;
 
-    // CS_CORE 各フィールドの先頭からのオフセット(header 4byte 含む)
     // Offsets of each CS_CORE field from the start of the block (including the 4-byte header)
-    private const int ClientNameOffset = 24; // 32byte (UTF-16, NUL終端) / 32 bytes (UTF-16, NUL-terminated)
+    private const int ClientNameOffset = 24; // 32 bytes (UTF-16, NUL-terminated)
     private const int ClientDigProductIdOffset = 146; // 64byte
 
     public static bool PatchServerSelectedProtocol(Span<byte> tpkt, uint expectedCurrent, uint newValue)
@@ -36,17 +30,15 @@ internal static class McsConnectInitial
         var sspPos = p + SspOffsetInBlock;
         if (ByteOps.U32Le(tpkt, sspPos) != expectedCurrent)
         {
-            return false; // 誤検出防止(期待値のみ書換) / avoid false positives (rewrite only when it matches the expected value)
+            return false; // Avoid false positives (rewrite only when it matches the expected value)
         }
 
         ByteOps.W32Le(tpkt, sspPos, newValue);
         return true;
     }
 
-    // clientName を指定値に書き換え(clientName!=null時)、clientDigProductId をゼロ化(zeroProductId時)。
-    // 何か書き換えたら true。
-    // Rewrites clientName to the given value (when clientName != null) and zeros clientDigProductId (when zeroProductId).
-    // Returns true if anything was rewritten.
+    // Rewrites clientName to the given value (when clientName != null) and zeros clientDigProductId (when zeroProductId)
+    // Returns true if anything was rewritten
     public static bool PatchClientIdentity(Span<byte> tpkt, string? clientName, bool zeroProductId)
     {
         var p = FindCsCore(tpkt, out var blockLen);
@@ -59,26 +51,24 @@ internal static class McsConnectInitial
 
         if (clientName is not null)
         {
-            // clientName (32byte, UTF-16LE, NUL終端) を差し替え
             // Replace clientName (32 bytes, UTF-16LE, NUL-terminated)
             var nameField = tpkt.Slice(p + ClientNameOffset, 32);
             nameField.Clear();
             var nb = Encoding.Unicode.GetBytes(clientName);
-            nb.AsSpan(0, Math.Min(nb.Length, 30)).CopyTo(nameField); // 15文字+NUL 分を残す / leave room for 15 chars + NUL
+            nb.AsSpan(0, Math.Min(nb.Length, 30)).CopyTo(nameField); // Leave room for 15 chars + NUL
             did = true;
         }
 
         if (zeroProductId && (blockLen >= (ClientDigProductIdOffset + 64)))
         {
-            tpkt.Slice(p + ClientDigProductIdOffset, 64).Clear(); // clientDigProductId をゼロ化 / zero out clientDigProductId
+            tpkt.Slice(p + ClientDigProductIdOffset, 64).Clear(); // Zero out clientDigProductId
             did = true;
         }
 
         return did;
     }
 
-    // CS_CORE ブロックを探す。serverSelectedProtocol==SSL で本物と確定(クライアント脚は常に SSL)。
-    // Find the CS_CORE block. serverSelectedProtocol==SSL confirms the real one (the client leg is always SSL).
+    // Find the CS_CORE block. serverSelectedProtocol==SSL confirms the real one (the client leg is always SSL)
     private static int FindCsCore(ReadOnlySpan<byte> tpkt, out int blockLen)
     {
         blockLen = 0;
@@ -113,7 +103,7 @@ internal static class McsConnectInitial
 
             if (ByteOps.U32Le(tpkt, p + SspOffsetInBlock) != RdpConstants.ProtocolSsl)
             {
-                continue; // 確定 / confirmed
+                continue; // Confirmed
             }
 
             blockLen = bl;

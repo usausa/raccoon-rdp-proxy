@@ -5,17 +5,15 @@ using System.Text;
 
 using Raccoon.RdpProxy.Credssp;
 
-// NTLMv2 / NTLM2 session security をハンドロール実装 (MS-NLMP)。外部依存なし。
-// NEGOTIATE→CHALLENGE→AUTHENTICATE を生成し、確立後は Seal/Unseal を提供する。
-// Hand-rolled implementation of NTLMv2 / NTLM2 session security (MS-NLMP). No external dependencies.
-// Builds NEGOTIATE -> CHALLENGE -> AUTHENTICATE, and provides Seal/Unseal once established.
+// Hand-rolled implementation of NTLMv2 / NTLM2 session security (MS-NLMP). No external dependencies
+// Builds NEGOTIATE -> CHALLENGE -> AUTHENTICATE, and provides Seal/Unseal once established
 internal sealed class NtlmClientAuth : ICredSspAuth
 {
     private readonly string domain;
     private readonly string user;
     private readonly string password;
     private readonly string workstation;
-    private readonly byte[]? ntHash; // 事前計算した NT ハッシュ(MD4(pw)) を使う場合 / used when a pre-computed NT hash (MD4(pw)) is supplied
+    private readonly byte[]? ntHash; // Used when a pre-computed NT hash (MD4(pw)) is supplied
 
     private byte[] negotiateMsg = [];
     private Rc4? clientSeal;
@@ -39,7 +37,7 @@ internal sealed class NtlmClientAuth : ICredSspAuth
 
     public byte[] ProcessChallenge(byte[] challenge, string spn) => ProcessChallengeAndBuildAuthenticate(challenge, spn);
 
-    // Type 1: NEGOTIATE_MESSAGE。Signature(8)+Type(4)+Flags(4)+DomainFields(8)+WorkstationFields(8)+Version(8)=40。
+    // Type 1: NEGOTIATE_MESSAGE Signature(8)+Type(4)+Flags(4)+DomainFields(8)+WorkstationFields(8)+Version(8)=40。
     public byte[] BuildNegotiate()
     {
         var flags = NtlmFlags.Unicode | NtlmFlags.RequestTarget | NtlmFlags.Ntlm |
@@ -57,7 +55,6 @@ internal sealed class NtlmClientAuth : ICredSspAuth
         return m;
     }
 
-    // Type 3: AUTHENTICATE を生成 (spn は例 "TERMSRV/192.168.50.31")。
     // Type 3: build AUTHENTICATE (spn example: "TERMSRV/192.168.50.31").
     public byte[] ProcessChallengeAndBuildAuthenticate(byte[] challengeMsg, string spn)
     {
@@ -65,13 +62,12 @@ internal sealed class NtlmClientAuth : ICredSspAuth
         var ntowf = NtowfV2();
 
         var clientChallenge = RandomNumberGenerator.GetBytes(8);
-        var ts = ExtractTimestamp(ch.TargetInfo); // サーバ提示の時刻があれば使う / use the timestamp the server supplied, if any
+        var ts = ExtractTimestamp(ch.TargetInfo); // Use the timestamp the server supplied, if any
 
-        // AUTHENTICATE 用 target info = サーバの AV pairs をコピーし、MIC フラグ(0x02)と SPN を付与
-        // target info for AUTHENTICATE = copy of the server AV pairs plus the MIC flag (0x02) and the SPN.
+        // Target info for AUTHENTICATE = copy of the server AV pairs plus the MIC flag (0x02) and the SPN.
         var targetInfo = AugmentTargetInfo(ch.TargetInfo, spn);
 
-        // temp blob
+        // Temp blob
         var temp = new List<byte> { 0x01, 0x01, 0, 0, 0, 0, 0, 0 };
         var t8 = new byte[8];
         BinaryPrimitives.WriteInt64LittleEndian(t8, ts);
@@ -103,9 +99,9 @@ internal sealed class NtlmClientAuth : ICredSspAuth
         }
 
         var keyExchangeKey = sessionBaseKey; // NTLMv2
-        var keyExch = (ch.Flags & NtlmFlags.KeyExchange) != 0;
+        var keyExchange = (ch.Flags & NtlmFlags.KeyExchange) != 0;
         byte[] encryptedRandomSessionKey;
-        if (keyExch)
+        if (keyExchange)
         {
             ExportedSessionKey = RandomNumberGenerator.GetBytes(16);
             encryptedRandomSessionKey = Rc4.Encrypt(keyExchangeKey, ExportedSessionKey);
@@ -116,12 +112,11 @@ internal sealed class NtlmClientAuth : ICredSspAuth
             encryptedRandomSessionKey = [];
         }
 
-        // 使用フラグ (challenge をベースに必要ビットを立てる)
-        // Flags in use (start from the challenge and set the required bits).
+        // Flags in use (start from the challenge and set the required bits)
         var useFlags = NtlmFlags.Unicode | NtlmFlags.Ntlm | NtlmFlags.ExtendedSessionSecurity |
                        NtlmFlags.Sign | NtlmFlags.Seal | NtlmFlags.AlwaysSign |
                        NtlmFlags.Negotiate128 | NtlmFlags.Negotiate56 | NtlmFlags.Version | NtlmFlags.TargetInfo;
-        if (keyExch)
+        if (keyExchange)
         {
             useFlags |= NtlmFlags.KeyExchange;
         }
@@ -139,14 +134,13 @@ internal sealed class NtlmClientAuth : ICredSspAuth
             mic = h.ComputeHash(all);
         }
 
-        mic.CopyTo(auth, micOffset); // プレースホルダ(0)を実 MIC で上書き / overwrite the placeholder (0) with the real MIC
+        mic.CopyTo(auth, micOffset); // Overwrite the placeholder (0) with the real MIC
 
         DeriveSessionSecurity(ExportedSessionKey);
         return auth;
     }
 
-    // CredSSP 用 EncryptMessage (封印 + 署名)。出力 = signature(16) || sealed。
-    // EncryptMessage for CredSSP (seal + sign). Output = signature(16) || sealed.
+    // EncryptMessage for CredSSP (seal + sign). Output = signature(16) || sealed
     public byte[] Seal(ReadOnlySpan<byte> plaintext)
     {
         var sealedData = new byte[plaintext.Length];
@@ -159,8 +153,7 @@ internal sealed class NtlmClientAuth : ICredSspAuth
         return outp;
     }
 
-    // CredSSP 用 DecryptMessage。入力 = signature(16) || sealed。署名検証は省略(復号のみ)。
-    // DecryptMessage for CredSSP. Input = signature(16) || sealed. Signature verification is skipped (decrypt only).
+    // DecryptMessage for CredSSP. Input = signature(16) || sealed. Signature verification is skipped (decrypt only)
     public byte[] Unseal(ReadOnlySpan<byte> token)
     {
         var sealedData = token[16..];
@@ -197,8 +190,7 @@ internal sealed class NtlmClientAuth : ICredSspAuth
 
     private static byte[] U16(string s) => Encoding.Unicode.GetBytes(s);
 
-    // NTLM2 セッションセキュリティ署名 (MS-NLMP 3.4.4.1)。
-    // NTLM2 session security signature (MS-NLMP 3.4.4.1).
+    // NTLM2 session security signature (MS-NLMP 3.4.4.1)
     private static byte[] Mac(byte[] signKey, Rc4 sealHandle, uint seq, ReadOnlySpan<byte> message)
     {
         Span<byte> seqBytes = stackalloc byte[4];
@@ -213,7 +205,7 @@ internal sealed class NtlmClientAuth : ICredSspAuth
         }
 
         Span<byte> enc = stackalloc byte[8];
-        sealHandle.Process(checksum.AsSpan(0, 8), enc); // checksum を同じ RC4 ハンドルで封印 / seal the checksum with the same RC4 handle
+        sealHandle.Process(checksum.AsSpan(0, 8), enc); // Seal the checksum with the same RC4 handle
         var sig = new byte[16];
         BinaryPrimitives.WriteUInt32LittleEndian(sig.AsSpan(0), 1); // Version
         enc.CopyTo(sig.AsSpan(4)); // Checksum(8)
@@ -223,8 +215,8 @@ internal sealed class NtlmClientAuth : ICredSspAuth
 
     private static long ExtractTimestamp(byte[] targetInfo)
     {
-        // AV_PAIR を走査し MsvAvTimestamp(0x07) を探す。無ければ現在時刻(FILETIME)。
-        // Scan the AV_PAIRs for MsvAvTimestamp(0x07). Fall back to the current time (FILETIME) if absent.
+        // Scan the AV_PAIRs for MsvAvTimestamp(0x07)
+        // Fall back to the current time (FILETIME) if absent.
         var p = 0;
         while ((p + 4) <= targetInfo.Length)
         {
@@ -246,8 +238,7 @@ internal sealed class NtlmClientAuth : ICredSspAuth
         return DateTime.UtcNow.ToFileTimeUtc();
     }
 
-    // サーバの target info をコピーし、MsvAvFlags に MIC ビット(0x02)を、MsvAvTargetName に SPN を付与。
-    // Copy the server target info, set the MIC bit (0x02) in MsvAvFlags, and add the SPN as MsvAvTargetName.
+    // Copy the server target info, set the MIC bit (0x02) in MsvAvFlags, and add the SPN as MsvAvTargetName
     private static byte[] AugmentTargetInfo(byte[] serverInfo, string spn)
     {
         var pairs = new List<(ushort Id, byte[] Val)>();
@@ -266,7 +257,7 @@ internal sealed class NtlmClientAuth : ICredSspAuth
         }
 
         // MsvAvFlags(0x06) に 0x00000002 (MIC present)
-        // Set 0x00000002 (MIC present) in MsvAvFlags(0x06).
+        // Set 0x00000002 (MIC present) in MsvAvFlags(0x06)
         var fi = pairs.FindIndex(static x => x.Id == 0x0006);
         var flagVal = fi >= 0 ? pairs[fi].Val : new byte[4];
         var fv = flagVal.Length >= 4 ? BinaryPrimitives.ReadUInt32LittleEndian(flagVal) : 0;
@@ -347,8 +338,7 @@ internal sealed class NtlmClientAuth : ICredSspAuth
         var uU = U16(userName);
         var wU = U16(workstationName);
 
-        // レイアウト: header(8) type(4) 6xField(8) flags(4) version(8) MIC(16) then payload
-        // Layout: header(8) type(4) 6xField(8) flags(4) version(8) MIC(16) then payload.
+        // Layout: header(8) type(4) 6xField(8) flags(4) version(8) MIC(16) then payload
         var fixedLen = 8 + 4 + (6 * 8) + 4 + 8 + 16;
         var off = fixedLen;
 
@@ -377,7 +367,7 @@ internal sealed class NtlmClientAuth : ICredSspAuth
         Field(52, encryptedRandomSessionKey, sessOff);
         BinaryPrimitives.WriteUInt32LittleEndian(m.AsSpan(60), (uint)flags);
         WriteVersion(m.AsSpan(64));
-        micOffset = 72; // MIC(16) は version(8) の直後 (プレースホルダ 0) / MIC(16) sits right after version(8) (placeholder 0)
+        micOffset = 72; // MIC(16) sits right after version(8) (placeholder 0)
 
         lmResponse.CopyTo(m, lmOff);
         ntResponse.CopyTo(m, ntOff);

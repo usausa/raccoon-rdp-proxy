@@ -1,7 +1,6 @@
 namespace Raccoon.RdpProxy.Ntlm;
 
-// RC4 ストリーム暗号 (状態を保持)。
-// RC4 stream cipher (keeps its state).
+// RC4 stream cipher (keeps its state)
 internal sealed class Rc4
 {
     private readonly byte[] state = new byte[256];

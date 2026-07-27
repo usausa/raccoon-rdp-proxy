@@ -3,8 +3,7 @@ namespace Raccoon.RdpProxy.Credssp;
 using System.Security.Cryptography;
 using System.Text;
 
-// ハンドロール CredSSP クライアント (MS-CSSP)。NLA 必須ターゲットへ資格情報を提示する。
-// Hand-rolled CredSSP client (MS-CSSP). Presents credentials to targets that require NLA.
+// Hand-rolled CredSSP client (MS-CSSP). Presents credentials to targets that require NLA
 internal sealed class CredSspClient
 {
     private const int CredSspVersion = 6;
@@ -55,7 +54,6 @@ internal sealed class CredSspClient
         await WriteAsync(tls, BuildTsRequest(negoToken: authenticate, pubKeyAuth: pubKeyAuth, clientNonce: nonce), ct).ConfigureAwait(false);
         log?.Invoke("CredSSP: AUTHENTICATE + pubKeyAuth sent");
 
-        // 4) サーバ pubKeyAuth 応答
         // 4) Server pubKeyAuth response
         byte[] t4;
         try
@@ -64,9 +62,7 @@ internal sealed class CredSspClient
         }
         catch (Exception e) when (e is IOException or InvalidOperationException)
         {
-            throw new IOException(
-                "Server closed the connection after AUTHENTICATE. Likely wrong credentials (user/password/domain) or NTLM verification failure: " + e.Message,
-                e);
+            throw new IOException("Server closed the connection after AUTHENTICATE. Likely wrong credentials (user/password/domain) or NTLM verification failure: " + e.Message, e);
         }
 
         var err = ExtractErrorCode(t4);
@@ -92,7 +88,6 @@ internal sealed class CredSspClient
         log?.Invoke("CredSSP: TSCredentials sent");
     }
 
-    // TSRequest 構築
     // Builds the TSRequest
     internal static byte[] BuildTsRequest(
         byte[]? negoToken = null,
@@ -129,7 +124,7 @@ internal sealed class CredSspClient
 
     internal static byte[]? ExtractNegoToken(byte[] tsRequest)
     {
-        var (_, cs, cl, _) = Der.ReadTlv(tsRequest, 0); // 外側 SEQUENCE / outer SEQUENCE
+        var (_, cs, cl, _) = Der.ReadTlv(tsRequest, 0); // Outer SEQUENCE
         var seq = tsRequest.AsSpan(cs, cl);
         var negoData = Der.FindContext(seq, 1); // [1] NegoData
         if (negoData.IsEmpty)

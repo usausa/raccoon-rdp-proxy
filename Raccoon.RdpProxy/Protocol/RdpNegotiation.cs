@@ -1,14 +1,12 @@
 namespace Raccoon.RdpProxy.Protocol;
 
-// X.224 接続要求/確認(RDP Negotiation) の生成・解析。
 // Build/parse X.224 connection request/confirm (RDP Negotiation).
 internal static class RdpNegotiation
 {
-    // TPKT(4) + LI(1) + [E0/D0 + dstref2 + srcref2 + class1](6) + Neg(8) = 19 固定 / fixed
+    // TPKT(4) + LI(1) + [E0/D0 + dstref2 + srcref2 + class1](6) + Neg(8) = 19 / fixed
     private const int NegPduSize = 19;
 
-    // クライアントの CR から要求プロトコルを取り出す(cookie は無視、情報用)。
-    // Extract the requested protocols from the client's CR (cookie ignored; informational).
+    // Extract the requested protocols from the client's CR (cookie ignored; informational)
     public static uint ParseRequestedProtocols(ReadOnlySpan<byte> cr)
     {
         const int varStart = 4 + 1 + 6;
@@ -20,11 +18,10 @@ internal static class RdpNegotiation
         return RdpConstants.ProtocolRdp;
     }
 
-    // サーバへ送る CR (指定プロトコルを要求) を生成。
-    // Build the CR sent to the server (requesting the specified protocols).
+    // Build the CR sent to the server (requesting the specified protocols)
     public static byte[] BuildConnectionRequest(uint requestedProtocols)
     {
-        Span<byte> b = stackalloc byte[NegPduSize]; // 既定で 0 初期化 / zero-initialized by default
+        Span<byte> b = stackalloc byte[NegPduSize]; // Zero-initialized by default
         b[0] = 0x03;
         ByteOps.W16Be(b, 2, NegPduSize);
         b[4] = 14; // LI = 6 + 8
@@ -35,8 +32,7 @@ internal static class RdpNegotiation
         return b.ToArray();
     }
 
-    // クライアントへ送る CC (指定プロトコルを選択) を生成。
-    // Build the CC sent to the client (selecting the specified protocol).
+    // Build the CC sent to the client (selecting the specified protocol)
     public static byte[] BuildConnectionConfirm(uint selectedProtocol, byte respFlags)
     {
         Span<byte> b = stackalloc byte[NegPduSize];
@@ -51,14 +47,13 @@ internal static class RdpNegotiation
         return b.ToArray();
     }
 
-    // サーバの CC を解析。RSP なら selected、FAILURE なら例外。
-    // Parse the server's CC. Returns selected for RSP; throws on FAILURE.
+    // Parse the server's CC. Returns selected for RSP; throws on FAILURE
     public static (uint Selected, byte Flags) ParseConnectionConfirm(ReadOnlySpan<byte> cc)
     {
         const int negStart = 4 + 1 + 6;
         if (cc.Length < (negStart + 8))
         {
-            return (RdpConstants.ProtocolRdp, 0); // Neg 無し = 標準RDP / no Neg = standard RDP
+            return (RdpConstants.ProtocolRdp, 0); // No Neg = standard RDP
         }
 
         var type = cc[negStart];

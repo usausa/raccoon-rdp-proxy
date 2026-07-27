@@ -1,7 +1,6 @@
 namespace Raccoon.RdpProxy.Protocol;
 
-// MS-RDPBCGR で使う定数。
-// Constants used by MS-RDPBCGR.
+// Constants used by MS-RDPBCGR
 internal static class RdpConstants
 {
     // RDP Negotiation (MS-RDPBCGR 2.2.1.1.1 / 2.2.1.2.1 / 2.2.1.2.2)
