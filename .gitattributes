@@ -1,7 +1,7 @@
 ###############################################################################
 # Set default behavior to automatically normalize line endings.
 ###############################################################################
-* text=auto
+* text=auto eol=crlf
 
 ###############################################################################
 # Shell scripts must keep LF even when checked out on Windows, otherwise the
