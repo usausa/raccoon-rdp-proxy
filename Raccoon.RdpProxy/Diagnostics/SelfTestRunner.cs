@@ -219,7 +219,7 @@ internal static class SelfTestRunner
         Assert((back is not null) && back.AsSpan().SequenceEqual(token), "TSRequest negoToken round-trip failed");
 
         var req2 = CredSspClient.BuildTsRequest(pubKeyAuth: [1, 2, 3, 4]);
-        Assert(CredSspClient.ExtractPubKeyAuth(req2) is { Length: 4 } p && (p[0] == 1) && (p[3] == 4), "pubKeyAuth extraction failed");
+        Assert((CredSspClient.ExtractPubKeyAuth(req2) is { Length: 4 } p) && (p[0] == 1) && (p[3] == 4), "pubKeyAuth extraction failed");
 
         var reqErr = Der.Sequence(Der.Context(0, Der.Integer(6)), Der.Context(4, Der.Integer(0xC000006D)));
         Assert((uint)CredSspClient.ExtractErrorCode(reqErr) == 0xC000006D, "errorCode extraction failed");

@@ -22,7 +22,7 @@ internal static class CredSspProbe
 
         var colon = spec.LastIndexOf(':');
         var host = colon > 0 ? spec[..colon] : spec;
-        var port = colon > 0 ? int.Parse(spec[(colon + 1)..], CultureInfo.InvariantCulture) : 3389;
+        var port = colon > 0 ? Int32.Parse(spec[(colon + 1)..], CultureInfo.InvariantCulture) : 3389;
 
         Console.WriteLine($"CredSSP probe -> {host}:{port}  user={domain}\\{user}  impl={impl}");
 

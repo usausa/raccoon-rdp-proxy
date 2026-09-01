@@ -32,7 +32,7 @@ internal sealed class IpAcl
             var prefix = maxPrefix;
             if (slash >= 0)
             {
-                if (!int.TryParse(s[(slash + 1)..], out prefix) || (prefix < 0) || (prefix > maxPrefix))
+                if (!Int32.TryParse(s[(slash + 1)..], out prefix) || (prefix < 0) || (prefix > maxPrefix))
                 {
                     throw new ArgumentException($"allow: invalid prefix length: {raw}");
                 }
