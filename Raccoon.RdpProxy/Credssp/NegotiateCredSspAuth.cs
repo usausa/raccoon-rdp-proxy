@@ -43,7 +43,7 @@ internal sealed class NegotiateCredSspAuth : ICredSspAuth, IDisposable
             throw new IOException($"Negotiate Wrap failed: {st}");
         }
 
-        return w.WrittenSpan.ToArray();
+        return [.. w.WrittenSpan];
     }
 
     public byte[] Unseal(ReadOnlySpan<byte> token)
@@ -55,7 +55,7 @@ internal sealed class NegotiateCredSspAuth : ICredSspAuth, IDisposable
             throw new IOException($"Negotiate Unwrap failed: {st}");
         }
 
-        return w.WrittenSpan.ToArray();
+        return [.. w.WrittenSpan];
     }
 
     public void Dispose() => na.Dispose();

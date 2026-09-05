@@ -29,7 +29,7 @@ internal static class RdpNegotiation
         b[11] = RdpConstants.TypeRdpNegReq;
         ByteOps.W16Le(b, 13, 8);
         ByteOps.W32Le(b, 15, requestedProtocols);
-        return b.ToArray();
+        return [.. b];
     }
 
     // Build the CC sent to the client (selecting the specified protocol)
@@ -44,7 +44,7 @@ internal static class RdpNegotiation
         b[12] = respFlags;
         ByteOps.W16Le(b, 13, 8);
         ByteOps.W32Le(b, 15, selectedProtocol);
-        return b.ToArray();
+        return [.. b];
     }
 
     // Parse the server's CC. Returns selected for RSP; throws on FAILURE

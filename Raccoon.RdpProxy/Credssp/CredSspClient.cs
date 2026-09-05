@@ -143,7 +143,7 @@ internal sealed class CredSspClient
         }
 
         var (_, s3, l3, _) = Der.ReadTlv(tok, 0);
-        return tok.Slice(s3, l3).ToArray();
+        return [.. tok.Slice(s3, l3)];
     }
 
     internal static byte[]? ExtractPubKeyAuth(byte[] tsRequest)
@@ -157,7 +157,7 @@ internal sealed class CredSspClient
         }
 
         var (_, s, l, _) = Der.ReadTlv(ctx, 0); // OCTET STRING
-        return ctx.Slice(s, l).ToArray();
+        return [.. ctx.Slice(s, l)];
     }
 
     internal static byte[]? ExtractAuthInfo(byte[] tsRequest)
@@ -171,7 +171,7 @@ internal sealed class CredSspClient
         }
 
         var (_, s, l, _) = Der.ReadTlv(ctx, 0);
-        return ctx.Slice(s, l).ToArray();
+        return [.. ctx.Slice(s, l)];
     }
 
     internal static int ExtractErrorCode(byte[] tsRequest)

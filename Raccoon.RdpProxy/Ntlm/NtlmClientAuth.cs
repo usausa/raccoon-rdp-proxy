@@ -252,7 +252,7 @@ internal sealed class NtlmClientAuth : ICredSspAuth
                 break;
             }
 
-            pairs.Add((id, serverInfo.AsSpan(p + 4, len).ToArray()));
+            pairs.Add((id, [.. serverInfo.AsSpan(p + 4, len)]));
             p += 4 + len;
         }
 
@@ -312,7 +312,7 @@ internal sealed class NtlmClientAuth : ICredSspAuth
         // TargetInfoFields at offset 40: Len(2), MaxLen(2), Offset(4)
         var tiLen = BinaryPrimitives.ReadUInt16LittleEndian(msg.AsSpan(40));
         var tiOff = (int)BinaryPrimitives.ReadUInt32LittleEndian(msg.AsSpan(44));
-        c.TargetInfo = tiLen > 0 ? msg.AsSpan(tiOff, tiLen).ToArray() : [];
+        c.TargetInfo = tiLen > 0 ? [.. msg.AsSpan(tiOff, tiLen)] : [];
         return c;
     }
 
