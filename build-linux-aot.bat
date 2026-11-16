@@ -12,10 +12,10 @@ rem  One-time setup in the default WSL distro:
 rem    wsl --install -d Ubuntu       (skip if a distro is already installed)
 rem    wsl --set-default Ubuntu      (the publish runs in the DEFAULT distro)
 rem    sudo apt update
-rem    sudo apt install -y dotnet-sdk-10.0 clang zlib1g-dev
-rem  If the distro has no dotnet-sdk-10.0 package, install the SDK with
+rem    sudo apt install -y dotnet-sdk-11.0 clang zlib1g-dev
+rem  If the distro has no dotnet-sdk-11.0 package, install the SDK with
 rem  Microsoft's script from https://dot.net/v1/dotnet-install.sh -- channel
-rem  10.0 -- and put $HOME/.dotnet on PATH.
+rem  11.0 -- and put $HOME/.dotnet on PATH.
 rem  Verify with: dotnet --version / clang --version
 rem
 rem  If the relay host runs Rocky Linux, prefer build-linux-aot.sh on the relay

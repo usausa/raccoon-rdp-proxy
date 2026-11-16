@@ -7,9 +7,9 @@
 #  via WSL).
 #
 #  Prerequisites:
-#    Rocky 9   : sudo dnf install -y dotnet-sdk-10.0 clang zlib-devel
-#    Rocky 10  : sudo dnf install -y dotnet-sdk-10.0 clang zlib-ng-compat-devel
-#    Debian    : sudo apt install -y dotnet-sdk-10.0 clang zlib1g-dev
+#    Rocky 9   : sudo dnf install -y dotnet-sdk-11.0 clang zlib-devel
+#    Rocky 10  : sudo dnf install -y dotnet-sdk-11.0 clang zlib-ng-compat-devel
+#    Debian    : sudo apt install -y dotnet-sdk-11.0 clang zlib1g-dev
 #
 #  This only produces the artifact (deploying to the relay host is manual). The binary
 #  needs the glibc of the build host or newer, so build on a distribution that is the
@@ -48,15 +48,15 @@ fail() {
 
 command -v dotnet >/dev/null 2>&1 || fail \
     'the .NET SDK was not found.' \
-    'Rocky Linux : sudo dnf install -y dotnet-sdk-10.0' \
-    'or          : curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel 10.0'
+    'Rocky Linux : sudo dnf install -y dotnet-sdk-11.0' \
+    'or          : curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel 11.0'
 
 SDKS="$(dotnet --list-sdks 2>/dev/null || true)"
-grep -q '^10\.' <<<"$SDKS" || fail \
-    'the .NET SDK 10 was not found.' \
+grep -q '^11\.' <<<"$SDKS" || fail \
+    'the .NET SDK 11 was not found.' \
     'Installed SDKs:' \
     "${SDKS:-(none)}" \
-    'Rocky Linux : sudo dnf install -y dotnet-sdk-10.0'
+    'Rocky Linux : sudo dnf install -y dotnet-sdk-11.0'
 
 command -v clang >/dev/null 2>&1 || fail \
     'clang was not found. NativeAOT needs it to link.' \

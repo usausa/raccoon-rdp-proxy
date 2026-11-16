@@ -2,7 +2,7 @@
 
 A relay proxy that **rewrites the `clientAddress` inside the RDP protocol itself** (`TS_EXTENDED_INFO_PACKET`, in the Client Info PDU) and re-establishes the session against a different host. For targets that require NLA (Network Level Authentication), it authenticates through a **hand-rolled CredSSP credential bridge**. **Verified against a real Windows NLA server.**
 
-- .NET 10 / Worker service (Windows service / systemd daemon)
+- .NET 11 / Worker service (Windows service / systemd daemon)
 - Rewrites `clientAddress` / `clientName` / identity fields inside the RDP protocol
 - CredSSP credential bridge for NLA-required targets (hand-rolled NTLMv2 + pubKeyAuth + TSCredentials)
 - Source-IP restriction (CIDR ACL) and concurrent relaying of multiple targets
@@ -42,7 +42,7 @@ The TCP source is also bound via `Source`, so **both the in-packet clientAddress
 ## Requirements
 
 - The relay host must be able to reach the target, and the IP given in `Source` must actually exist on it (dual-homing recommended)
-- The published binary is self-contained, so **no .NET runtime is needed on the relay host**. The .NET 10 SDK is only needed to run from source (`dotnet run`)
+- The published binary is self-contained, so **no .NET runtime is needed on the relay host**. The .NET 11 SDK is only needed to run from source (`dotnet run`)
 - Open the listen port on the relay: `sudo firewall-cmd --add-port=3389/tcp` (depending on the environment, check separate nftables etc. settings too)
 
 ## Configuration (appsettings.json)

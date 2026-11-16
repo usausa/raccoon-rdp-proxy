@@ -1,5 +1,5 @@
 # ---- build (produce a NativeAOT native binary from source) ----
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:11.0 AS build
 # NativeAOT linking requires clang and the zlib headers.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends clang zlib1g-dev \
@@ -12,7 +12,7 @@ RUN dotnet publish Raccoon.RdpProxy/Raccoon.RdpProxy.csproj -c Release -r linux-
     -p:PublishAot=true -p:StripSymbols=true -o /out
 
 # ---- runtime (minimal image with native dependencies only) ----
-FROM mcr.microsoft.com/dotnet/runtime-deps:10.0
+FROM mcr.microsoft.com/dotnet/runtime-deps:11.0
 COPY --from=build /out/Raccoon.RdpProxy /usr/local/bin/Raccoon.RdpProxy
 
 # Config and certificate resolve from /cfg at runtime (credentials are never baked into the image).
