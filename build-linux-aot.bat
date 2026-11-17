@@ -18,9 +18,9 @@ rem  Microsoft's script from https://dot.net/v1/dotnet-install.sh -- channel
 rem  11.0 -- and put $HOME/.dotnet on PATH.
 rem  Verify with: dotnet --version / clang --version
 rem
-rem  If the relay host runs Rocky Linux, prefer build-linux-aot.sh on the relay
-rem  side family: a binary built on a distro with a newer glibc than the relay
-rem  will not start there (GLIBC_x.yz not found).
+rem  A binary built on a distro with a newer glibc than the relay host will not
+rem  start there (GLIBC_x.yz not found). Match the WSL distro to the relay host
+rem  family, or use build-linux-singlefile.bat, which has no such constraint.
 rem
 rem  NOTE: comments are English only on purpose. cmd.exe reads batch files in
 rem  the console code page, so UTF-8 Japanese would be mangled and the mangled

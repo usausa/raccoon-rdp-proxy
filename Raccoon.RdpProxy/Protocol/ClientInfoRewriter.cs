@@ -235,7 +235,7 @@ internal static class ClientInfoRewriter
         return outArr;
     }
 
-    private static void AddWithNul(List<byte> dst, byte[] value)
+    private static void AddWithNul(List<byte> dst, ReadOnlySpan<byte> value)
     {
         dst.AddRange(value);
         dst.Add(0);

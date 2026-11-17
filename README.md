@@ -142,7 +142,15 @@ Identity fields other than `ClientAddress` (IP) can also be rewritten. **Two ind
 
 **A single instance can handle multiple targets** (list multiple maps with per-target credentials in `Proxy:Maps`). Run it as a Windows service, systemd unit, or Docker container.
 
-(The Linux binary is produced by `build-linux-aot.sh` / `build-linux-aot.bat` / `build-linux-singlefile.bat` — see the header comment in each script.)
+Build scripts (see the header comment in each):
+
+| Script | Output | Requires |
+|---|---|---|
+| `build-release.bat` | `Publish\Windows` (win-x64 NativeAOT) + `Publish\Linux-x64` (self-contained single file) | MSVC toolchain for the AOT link; pass `singlefile` to skip it |
+| `build-linux-singlefile.bat` | `publish/linux-x64` self-contained single file | nothing beyond the SDK |
+| `build-linux-aot.bat` | `publish/aot-linux-x64` NativeAOT | WSL with `dotnet-sdk-11.0`, `clang`, zlib headers |
+
+NativeAOT cannot cross compile, so a Windows host cannot produce the Linux NativeAOT binary; `build-release.bat` uses the self-contained single-file path for Linux.
 
 ### Windows service
 ```pwsh
