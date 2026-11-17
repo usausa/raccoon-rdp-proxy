@@ -66,6 +66,7 @@ internal sealed class RdpProxyService : BackgroundService
                 map.ClientAddress ?? settings.ClientAddress,
                 cred.Domain,
                 cred.User,
+                DescribeAuth(map.AutoLogon ?? settings.AutoLogon, cred),
                 allow.Length == 0 ? "(all)" : String.Join(",", allow));
             listeners.Add(RunListenerAsync(map, cert, stoppingToken));
         }
@@ -99,6 +100,16 @@ internal sealed class RdpProxyService : BackgroundService
     private static bool IsExpectedConnectionError(Exception ex) =>
         ex is IOException or SocketException or AuthenticationException or InvalidDataException
             or FormatException or ObjectDisposedException or NotSupportedException;
+
+    private static string DescribeAuth(bool autoLogon, CredentialSetting cred)
+    {
+        if (autoLogon)
+        {
+            return !String.IsNullOrEmpty(cred.Password) ? "autologon" : "none";
+        }
+
+        return !String.IsNullOrEmpty(cred.Password) || !String.IsNullOrEmpty(cred.NtHash) ? "credssp" : "none";
+    }
 
     private async Task RunListenerAsync(MapSetting map, X509Certificate2 cert, CancellationToken ct)
     {
@@ -151,7 +162,12 @@ internal sealed class RdpProxyService : BackgroundService
         var clientName = map.ClientName ?? settings.ClientName;
         var maskClientInfo = map.MaskClientInfo ?? settings.MaskClientInfo;
         var cred = map.Credentials ?? settings.Credentials;
-        var useCredSsp = !String.IsNullOrEmpty(cred.Password) || !String.IsNullOrEmpty(cred.NtHash);
+        var hasCredential = !String.IsNullOrEmpty(cred.Password) || !String.IsNullOrEmpty(cred.NtHash);
+        var autoLogon = map.AutoLogon ?? settings.AutoLogon;
+        var useCredSsp = hasCredential && !autoLogon;
+        var autoLogonCredential = autoLogon && !String.IsNullOrEmpty(cred.Password)
+            ? new AutoLogonCredential(cred.Domain, cred.User, cred.Password)
+            : (AutoLogonCredential?)null;
 
         using (client)
         {
@@ -159,6 +175,11 @@ internal sealed class RdpProxyService : BackgroundService
             {
                 logger.InfoConnectionRejected(peer);
                 return;
+            }
+
+            if (autoLogon && hasCredential && (autoLogonCredential is null))
+            {
+                logger.WarnAutoLogonNoPassword(peer, dest);
             }
 
             ConfigureSocket(client.Client);
@@ -273,7 +294,7 @@ internal sealed class RdpProxyService : BackgroundService
                     logger.DebugCredSspAuthenticated(peer, cred.Domain, cred.User, settings.CredsspImpl);
                 }
 
-                await RelayAsync(peer, sslClient, sslBackend, clientAddress, clientName, maskClientInfo, selected, requested, backendReq, ct).ConfigureAwait(false);
+                await RelayAsync(peer, sslClient, sslBackend, clientAddress, clientName, maskClientInfo, autoLogonCredential, selected, requested, backendReq, ct).ConfigureAwait(false);
                 logger.DebugDisconnected(peer, dest);
             }
             catch (OperationCanceledException)
@@ -298,13 +319,14 @@ internal sealed class RdpProxyService : BackgroundService
         string clientAddress,
         string? clientName,
         bool maskClientInfo,
+        AutoLogonCredential? autoLogon,
         uint backendSelected,
         uint clientRequested,
         uint backendRequested,
         CancellationToken ct)
     {
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        var clientToBackend = PumpClientToBackendAsync(peer, client, backend, clientAddress, clientName, maskClientInfo, backendSelected, linked.Token);
+        var clientToBackend = PumpClientToBackendAsync(peer, client, backend, clientAddress, clientName, maskClientInfo, autoLogon, backendSelected, linked.Token);
         var backendToClient = PumpBackendToClientAsync(peer, backend, client, clientRequested, backendRequested, linked.Token);
         await Task.WhenAny(clientToBackend, backendToClient).ConfigureAwait(false);
         await linked.CancelAsync().ConfigureAwait(false);
@@ -362,7 +384,7 @@ internal sealed class RdpProxyService : BackgroundService
     }
 
     // client -> backend: keep framing until the Client Info PDU is found, then fall back to raw relay after rewriting
-    private async Task PumpClientToBackendAsync(string peer, SslStream client, SslStream backend, string clientAddress, string? clientName, bool maskClientInfo, uint backendProto, CancellationToken ct)
+    private async Task PumpClientToBackendAsync(string peer, SslStream client, SslStream backend, string clientAddress, string? clientName, bool maskClientInfo, AutoLogonCredential? autoLogon, uint backendProto, CancellationToken ct)
     {
         var hdr = new byte[4];
         var handled = false;
@@ -394,11 +416,15 @@ internal sealed class RdpProxyService : BackgroundService
                 byte[]? mod = null;
                 try
                 {
-                    mod = ClientInfoRewriter.TryRewrite(buf.AsSpan(0, len), clientAddress, maskClientInfo, out var old);
+                    mod = ClientInfoRewriter.TryRewrite(buf.AsSpan(0, len), clientAddress, maskClientInfo, autoLogon, out var old);
                     if (mod is not null)
                     {
                         handled = true;
                         logger.DebugClientAddressRewritten(peer, old ?? "(empty)", clientAddress, maskClientInfo);
+                        if (autoLogon is { } credential)
+                        {
+                            logger.DebugAutoLogonInjected(peer, credential.Domain, credential.User);
+                        }
                     }
                 }
                 catch (InvalidDataException e)

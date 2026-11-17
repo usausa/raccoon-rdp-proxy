@@ -5,10 +5,17 @@ using System.Text;
 // Core logic that rewrites the clientAddress inside the Client Info PDU
 internal static class ClientInfoRewriter
 {
+    private const int MaxCredentialField = 512;
+
     // Takes one slow-path TPKT and, if it is a Client Info PDU, returns a new TPKT with clientAddress rewritten to newAddress
     // Returns null if it is not a Client Info PDU (the caller forwards as-is)
     // If it is a Client Info PDU but parsing fails, throws InvalidDataException
-    public static byte[]? TryRewrite(ReadOnlySpan<byte> t, string newAddress, bool maskClientDir, out string? oldAddress)
+    public static byte[]? TryRewrite(
+        ReadOnlySpan<byte> t,
+        string newAddress,
+        bool maskClientDir,
+        AutoLogonCredential? autoLogon,
+        out string? oldAddress)
     {
         oldAddress = null;
         var len = t.Length;
@@ -82,7 +89,12 @@ internal static class ClientInfoRewriter
         i += 10;
 
         // Five variable-length strings. cb excludes the NUL, so each field is cb + term
-        i += cbDomain + term + cbUser + term + cbPass + term + cbShell + term + cbWork + term;
+        var domainAt = i;
+        var userAt = domainAt + cbDomain + term;
+        var passAt = userAt + cbUser + term;
+        var shellAt = passAt + cbPass + term;
+        var workAt = shellAt + cbShell + term;
+        i = workAt + cbWork + term;
 
         // TS_EXTENDED_INFO_PACKET
         if ((i + 4) > len)
@@ -116,14 +128,63 @@ internal static class ClientInfoRewriter
             }
         }
 
+        // CodePage..the 5 strings, with infoFlags and the credential strings replaced when auto-logon is requested
+        var newFlags = infoFlags;
+        byte[]? domainBytes = null;
+        byte[]? userBytes = null;
+        byte[]? passBytes = null;
+        if (autoLogon is { } credential)
+        {
+            if (term != 2)
+            {
+                throw new InvalidDataException("Auto-logon needs a Unicode (INFO_UNICODE) Client Info PDU.");
+            }
+
+            domainBytes = Encoding.Unicode.GetBytes(credential.Domain);
+            userBytes = Encoding.Unicode.GetBytes(credential.User);
+            passBytes = Encoding.Unicode.GetBytes(credential.Password);
+            if ((domainBytes.Length > MaxCredentialField) ||
+                (userBytes.Length > MaxCredentialField) ||
+                (passBytes.Length > MaxCredentialField))
+            {
+                throw new InvalidDataException("Auto-logon credential exceeds the Client Info PDU field limit.");
+            }
+
+            newFlags |= RdpConstants.InfoAutoLogon;
+        }
+
+        var head = new List<byte>((addrFamilyPos - infoStart) + (3 * (MaxCredentialField + 2)));
+        head.AddRange(t.Slice(infoStart, 4)); // CodePage
+        var flagBytes = new byte[4];
+        ByteOps.W32Le(flagBytes, 0, newFlags);
+        head.AddRange(flagBytes);
+        if (domainBytes is null)
+        {
+            head.AddRange(t[(infoStart + 8)..addrFamilyPos]);
+        }
+        else
+        {
+            var cbFields = new byte[10];
+            ByteOps.W16Le(cbFields, 0, (ushort)domainBytes.Length);
+            ByteOps.W16Le(cbFields, 2, (ushort)userBytes!.Length);
+            ByteOps.W16Le(cbFields, 4, (ushort)passBytes!.Length);
+            ByteOps.W16Le(cbFields, 6, cbShell);
+            ByteOps.W16Le(cbFields, 8, cbWork);
+            head.AddRange(cbFields);
+            AddWithNul(head, domainBytes);
+            AddWithNul(head, userBytes);
+            AddWithNul(head, passBytes);
+            head.AddRange(t.Slice(shellAt, cbShell + term));
+            head.AddRange(t.Slice(workAt, cbWork + term));
+        }
+
         // Determine the output size first, then write straight into a single buffer
         var newAddrChars = Encoding.Unicode.GetByteCount(newAddress);
         var newCb = newAddrChars + 2; // + 2byte NUL
-        var headLen = addrFamilyPos - infoStart; // CodePage..the 5 strings (unchanged)
 
         // tail body: when masking, cbClientDir=2 + NUL(2) + [clientDirEnd..len]; otherwise [addrEnd..len]
         var tailBodyLen = doMaskDir ? (4 + (len - clientDirEnd)) : (len - addrEnd);
-        var newInfoLen = headLen + 2 + 2 + newCb + tailBodyLen;
+        var newInfoLen = head.Count + 2 + 2 + newCb + tailBodyLen;
         var newUserDataLen = 4 + newInfoLen;
         var mcsFixed = mcsFixedEnd - 7; // 6
         var perSize = ByteOps.PerLengthSize(newUserDataLen);
@@ -145,8 +206,8 @@ internal static class ClientInfoRewriter
         w += ByteOps.WritePerLength(o, w, newUserDataLen); // PER length
         t.Slice(userDataStart, 4).CopyTo(o[w..]);
         w += 4; // Security Header
-        t.Slice(infoStart, headLen).CopyTo(o[w..]);
-        w += headLen; // CodePage..the 5 strings
+        head.CopyTo(outArr, w);
+        w += head.Count; // CodePage..the 5 strings
         t.Slice(addrFamilyPos, 2).CopyTo(o[w..]);
         w += 2; // clientAddressFamily
         ByteOps.W16Le(o, w, (ushort)newCb);
@@ -172,6 +233,13 @@ internal static class ClientInfoRewriter
         }
 
         return outArr;
+    }
+
+    private static void AddWithNul(List<byte> dst, byte[] value)
+    {
+        dst.AddRange(value);
+        dst.Add(0);
+        dst.Add(0);
     }
 
     private static InvalidDataException Truncated() =>

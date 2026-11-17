@@ -27,6 +27,9 @@ internal sealed class ProxySetting
     // handroll (no dependencies) | negotiate (SSPI/gss-ntlmssp)
     public string CredsspImpl { get; set; } = "handroll";
 
+    // When true, deliver Credentials through the Client Info PDU instead of CredSSP/NLA
+    public bool AutoLogon { get; set; }
+
     public CredentialSetting Credentials { get; set; } = new();
 
     // Source-IP allowlist (CIDR). Empty means allow all

@@ -19,6 +19,7 @@ internal static class RdpConstants
     public const ushort SecEncrypt = 0x0008;
 
     // Info Packet flags (MS-RDPBCGR 2.2.1.11.1.1)
+    public const uint InfoAutoLogon = 0x00000008;
     public const uint InfoUnicode = 0x00000010;
 
     // MCS DomainMCSPDU choice tag (T.125) = value << 2

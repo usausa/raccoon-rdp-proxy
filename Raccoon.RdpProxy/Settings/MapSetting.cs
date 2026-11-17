@@ -17,6 +17,8 @@ internal sealed class MapSetting
 
     public bool? MaskClientInfo { get; set; }
 
+    public bool? AutoLogon { get; set; }
+
     public CredentialSetting? Credentials { get; set; }
 
     public string[]? Allow { get; set; }

@@ -59,11 +59,12 @@ Settings live under the **`Proxy` section**. **Values directly under the section
 | `Proxy:ClientName` | `null` | Rewrite clientName (`""` for an empty name, `null` to pass through) |
 | `Proxy:MaskClientInfo` | `false` | Additionally erase `clientDigProductId` / `clientDir` |
 | `Proxy:CredsspImpl` | `handroll` | CredSSP implementation (`handroll` / `negotiate`) |
-| `Proxy:Credentials` | — | CredSSP credentials (`Domain` / `User` / `Password` / `NtHash`) |
+| `Proxy:AutoLogon` | `false` | Deliver `Credentials` through the Client Info PDU instead of CredSSP/NLA |
+| `Proxy:Credentials` | — | Credentials (`Domain` / `User` / `Password` / `NtHash`) |
 | `Proxy:Allow` | `[]` | Source-IP allowlist (CIDR; empty means allow all) |
 | `Proxy:Maps` | `[]` | Array of listen-port→target (at least one required) |
 
-`Maps[]` element: `ListenPort` (listen port) / `Host` (target) / `Port` (default 3389), plus the overridable `Source` / `ClientAddress` / `ClientName` / `MaskClientInfo` / `Credentials` / `Allow`.
+`Maps[]` element: `ListenPort` (listen port) / `Host` (target) / `Port` (default 3389), plus the overridable `Source` / `ClientAddress` / `ClientName` / `MaskClientInfo` / `AutoLogon` / `Credentials` / `Allow`.
 
 ```jsonc
 {
@@ -83,9 +84,18 @@ Settings live under the **`Proxy` section**. **Values directly under the section
 }
 ```
 - The listen address is shared, so **each map needs its own `ListenPort`**. The example gives the first target the standard 3389 (connect with just the host name) and the rest 13389 / 23389.
-- The startup log prints each map's effective values (`Map 0.0.0.0:3389 -> 192.168.2.10:3389 src=… clientAddr=… domain=… user=… allow=…`).
+- The startup log prints each map's effective values (`Map 0.0.0.0:3389 -> 192.168.2.10:3389 src=… clientAddr=… domain=… user=… auth=… allow=…`). `auth` is the credential delivery actually in effect: `credssp` / `autologon` / `none`.
 - If `Password` / `NtHash` are unset, CredSSP is disabled (TLS termination only = for targets without NLA).
 - `Domain`: empty or `.` for a local account, the NetBIOS name for a domain. Instead of a plaintext `Password` you may specify `NtHash` (the 16-byte hex of MD4(password)).
+
+#### AutoLogon
+`AutoLogon: true` requests `PROTOCOL_SSL` only (no CredSSP/NLA) and writes `Credentials` into the Client Info PDU with `INFO_AUTOLOGON` set, so the target logs the session on by itself.
+
+Use it when the target must not be authenticated over NLA. A domain account over NLA is a **network logon**, which a target that cannot reach a domain controller can only satisfy from cached material (it fails with `STATUS_NO_LOGON_SERVERS` after a reboot until someone logs on at the console). The session logon the Client Info PDU triggers is an **interactive logon**, which the cached domain verifier satisfies offline.
+
+- The target must not require NLA (`UserAuthentication = 0`). A target that requires it rejects the connection with `HYBRID_REQUIRED_BY_SERVER`.
+- `NtHash` cannot be used; the Client Info PDU carries a plaintext password. With `AutoLogon: true` and no `Password`, nothing is delivered and a warning is logged.
+- The client must send a Unicode (`INFO_UNICODE`) Client Info PDU; otherwise the PDU is forwarded unchanged and a warning is logged.
 
 Settings can also be overridden with environment variables or command-line arguments (e.g. `--Proxy:ClientAddress=…`, `Proxy__Maps__0__Host=…`, `--Serilog:MinimumLevel:Default=Debug`).
 
@@ -210,7 +220,8 @@ Diagnostic/utility modes that run without starting the host and then exit:
   ```bash
   ./Raccoon.RdpProxy --credssp-probe 192.168.2.10:3389 --user Administrator --password 'pw' --domain ''
   ```
-  Judge by `★ CredSSP authenticated` vs. `× … errorCode=0xC000006D` (= password mismatch), etc.
+  Judge by `* CredSSP authenticated` vs. `x … errorCode=0xC000006D (STATUS_LOGON_FAILURE)`. `errorCode` is reported with its NTSTATUS name; `STATUS_LOGON_FAILURE` covers both a wrong password and a nonexistent account, and `STATUS_NO_LOGON_SERVERS` means the target could not reach a domain controller for the given `--domain`.
+  The `CredSSP: CHALLENGE received` line reports the names the target advertises (`nbDomain` / `nbComputer` / `dnsDomain`), which shows whether it is domain-joined. In the service this line needs `--Serilog:MinimumLevel:Default=Debug`.
 - **`--credssp-impl handroll|negotiate`**: the default is the dependency-free `handroll`. `negotiate` uses the standard .NET SSPI (Linux needs `gss-ntlmssp`). The hand-rolled path has been verified equivalent to SSPI, so the default is normally fine.
 - **`--make-cert PATH`**: generate a 10-year PFX/.CER and exit.
 - **`--selftest`**: self-tests (protocol rewrites, NTLM crypto vectors, CredSSP DER).

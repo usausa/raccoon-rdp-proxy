@@ -19,9 +19,11 @@ internal static class SelfTestRunner
         fail += Check("MCS clientRequestedProtocols patch", TestClientRequestedProtocols);
         fail += Check("MCS clientName/productId mask", TestClientIdentityMask);
         fail += Check("Client Info clientDir mask", TestClientDirMask);
+        fail += Check("Client Info auto-logon inject", TestAutoLogonInject);
         fail += Check("IP ACL (CIDR)", TestIpAcl);
         fail += Check("NTLM vectors (MS-NLMP 4.2.4)", TestNtlmVectors);
         fail += Check("CredSSP DER round-trip", TestCredSspDer);
+        fail += Check("NTLM CHALLENGE decode", TestNtlmChallengeDecode);
 
         Console.WriteLine();
         Console.WriteLine(fail == 0 ? "SELFTEST: ALL PASSED" : $"SELFTEST: {fail} FAILED");
@@ -48,11 +50,11 @@ internal static class SelfTestRunner
         var tail = BuildTail();
         var pdu = BuildClientInfoPdu("192.168.10.11", tail);
 
-        var outp = ClientInfoRewriter.TryRewrite(pdu, "192.168.2.2", false, out var old);
+        var outp = ClientInfoRewriter.TryRewrite(pdu, "192.168.2.2", false, null, out var old);
         Assert(outp is not null, "rewrite returned null");
         Assert(old == "192.168.10.11", $"old address mismatch: {old}");
 
-        ClientInfoRewriter.TryRewrite(outp!, "X", false, out var now);
+        ClientInfoRewriter.TryRewrite(outp!, "X", false, null, out var now);
         Assert(now == "192.168.2.2", $"new address not applied: {now}");
 
         var tpktLen = (outp![2] << 8) | outp[3];
@@ -105,7 +107,7 @@ internal static class SelfTestRunner
     {
         var tail = BuildTail();
         var pdu = BuildClientInfoPdu("192.168.10.11", tail);
-        var outp = ClientInfoRewriter.TryRewrite(pdu, "192.168.2.2", true, out _);
+        var outp = ClientInfoRewriter.TryRewrite(pdu, "192.168.2.2", true, null, out _);
         Assert(outp is not null, "null");
 
         var got = ExtractTail(outp!);
@@ -118,6 +120,54 @@ internal static class SelfTestRunner
     }
 
     // Extract the tail that immediately follows clientAddress from the output PDU.
+    private static void TestAutoLogonInject()
+    {
+        var tail = BuildTail();
+        var pdu = BuildClientInfoPdu("192.168.10.11", tail);
+
+        var (_, baseDomain, baseUser, _) = ParseClientInfo(pdu);
+        Assert(baseDomain == "WORKGROUP", $"baseline domain mismatch: {baseDomain}");
+        Assert(baseUser == "administrator", $"baseline user mismatch: {baseUser}");
+
+        var credential = new AutoLogonCredential("NSW-G", "NSW00_004054", "p@ss word");
+        var outp = ClientInfoRewriter.TryRewrite(pdu, "192.168.2.2", false, credential, out _);
+        Assert(outp is not null, "auto-logon rewrite returned null");
+
+        var tpktLen = (outp![2] << 8) | outp[3];
+        Assert(tpktLen == outp.Length, $"TPKT length mismatch {tpktLen} != {outp.Length}");
+
+        var (flags, domain, user, password) = ParseClientInfo(outp);
+        Assert(domain == "NSW-G", $"domain not injected: {domain}");
+        Assert(user == "NSW00_004054", $"user not injected: {user}");
+        Assert(password == "p@ss word", $"password not injected: {password}");
+        Assert((flags & RdpConstants.InfoAutoLogon) != 0, "INFO_AUTOLOGON not set");
+
+        ClientInfoRewriter.TryRewrite(outp, "X", false, null, out var addr);
+        Assert(addr == "192.168.2.2", $"clientAddress not applied: {addr}");
+
+        var plain = ClientInfoRewriter.TryRewrite(pdu, "192.168.2.2", false, null, out _);
+        Assert(ExtractTail(outp).AsSpan().SequenceEqual(ExtractTail(plain!)), "tail changed by injection");
+    }
+
+    private static (uint Flags, string Domain, string User, string Password) ParseClientInfo(byte[] tpkt)
+    {
+        ReadOnlySpan<byte> s = tpkt;
+        var m = 7 + 1 + 2 + 2 + 1;
+        _ = ByteOps.ReadPerLength(s, ref m);
+        var infoStart = m + 4;
+        var flags = ByteOps.U32Le(s, infoStart + 4);
+        var cbDomain = ByteOps.U16Le(s, infoStart + 8);
+        var cbUser = ByteOps.U16Le(s, infoStart + 10);
+        var cbPass = ByteOps.U16Le(s, infoStart + 12);
+        var at = infoStart + 18;
+        var domain = Encoding.Unicode.GetString(tpkt, at, cbDomain);
+        at += cbDomain + 2;
+        var user = Encoding.Unicode.GetString(tpkt, at, cbUser);
+        at += cbUser + 2;
+        var password = Encoding.Unicode.GetString(tpkt, at, cbPass);
+        return (flags, domain, user, password);
+    }
+
     private static byte[] ExtractTail(byte[] tpkt)
     {
         ReadOnlySpan<byte> s = tpkt;
@@ -223,6 +273,46 @@ internal static class SelfTestRunner
 
         var reqErr = Der.Sequence(Der.Context(0, Der.Integer(6)), Der.Context(4, Der.Integer(0xC000006D)));
         Assert((uint)CredSspClient.ExtractErrorCode(reqErr) == 0xC000006D, "errorCode extraction failed");
+    }
+
+    private static void TestNtlmChallengeDecode()
+    {
+        var targetName = Encoding.Unicode.GetBytes("NSW-G");
+        var targetInfo = new List<byte>();
+        AddAvPair(targetInfo, 0x0002, Encoding.Unicode.GetBytes("NSW-G"));
+        AddAvPair(targetInfo, 0x0001, Encoding.Unicode.GetBytes("NSW31"));
+        AddAvPair(targetInfo, 0x0006, [0x02, 0x00, 0x00, 0x00]);
+        targetInfo.AddRange([0, 0, 0, 0]);
+
+        var msg = new byte[56 + targetName.Length + targetInfo.Count];
+        "NTLMSSP\0"u8.ToArray().CopyTo(msg, 0);
+        BinaryPrimitives.WriteUInt32LittleEndian(msg.AsSpan(8), 2);
+        BinaryPrimitives.WriteUInt16LittleEndian(msg.AsSpan(12), (ushort)targetName.Length);
+        BinaryPrimitives.WriteUInt16LittleEndian(msg.AsSpan(14), (ushort)targetName.Length);
+        BinaryPrimitives.WriteUInt32LittleEndian(msg.AsSpan(16), 56);
+        BinaryPrimitives.WriteUInt32LittleEndian(msg.AsSpan(20), 0x00800205);
+        BinaryPrimitives.WriteUInt16LittleEndian(msg.AsSpan(40), (ushort)targetInfo.Count);
+        BinaryPrimitives.WriteUInt16LittleEndian(msg.AsSpan(42), (ushort)targetInfo.Count);
+        BinaryPrimitives.WriteUInt32LittleEndian(msg.AsSpan(44), (uint)(56 + targetName.Length));
+        targetName.CopyTo(msg, 56);
+        targetInfo.CopyTo(msg, 56 + targetName.Length);
+
+        var info = NtlmChallengeInfo.Describe(msg);
+        Assert(info == "target=NSW-G flags=0x00800205 nbDomain=NSW-G nbComputer=NSW31 avFlags=0x00000002", $"challenge decode mismatch: {info}");
+        Assert(NtlmChallengeInfo.Describe("not-a-token"u8) is null, "non-NTLM token should not decode");
+
+        var described = NtStatus.Describe(unchecked((int)0xC000005E));
+        Assert(described == "0xC000005E (STATUS_NO_LOGON_SERVERS)", $"NTSTATUS describe mismatch: {described}");
+        Assert(NtStatus.Describe(0x0ABCDEF1) == "0x0ABCDEF1", "unknown NTSTATUS should stay numeric");
+    }
+
+    private static void AddAvPair(List<byte> dst, ushort id, byte[] value)
+    {
+        var header = new byte[4];
+        BinaryPrimitives.WriteUInt16LittleEndian(header.AsSpan(0), id);
+        BinaryPrimitives.WriteUInt16LittleEndian(header.AsSpan(2), (ushort)value.Length);
+        dst.AddRange(header);
+        dst.AddRange(value);
     }
 
     private static void Eq(string name, byte[] got, string exp)

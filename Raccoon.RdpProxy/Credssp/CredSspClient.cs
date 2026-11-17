@@ -3,6 +3,8 @@ namespace Raccoon.RdpProxy.Credssp;
 using System.Security.Cryptography;
 using System.Text;
 
+using Raccoon.RdpProxy.Ntlm;
+
 // Hand-rolled CredSSP client (MS-CSSP). Presents credentials to targets that require NLA
 internal sealed class CredSspClient
 {
@@ -37,13 +39,16 @@ internal sealed class CredSspClient
         var errEarly = ExtractErrorCode(t2);
         if (errEarly != 0)
         {
-            throw new IOException($"CredSSP: server rejected NEGOTIATE errorCode=0x{errEarly:X8}");
+            throw new IOException($"CredSSP: server rejected NEGOTIATE errorCode={NtStatus.Describe(errEarly)}");
         }
 
         var challenge = ExtractNegoToken(t2)
             ?? throw new IOException(
                 $"CredSSP: CHALLENGE missing (response {t2.Length}B: {Convert.ToHexString(t2.AsSpan(0, Math.Min(64, t2.Length)))})");
-        log?.Invoke($"CredSSP: CHALLENGE received ({challenge.Length}B)");
+        var challengeInfo = NtlmChallengeInfo.Describe(challenge);
+        log?.Invoke(challengeInfo is null
+            ? $"CredSSP: CHALLENGE received ({challenge.Length}B)"
+            : $"CredSSP: CHALLENGE received ({challenge.Length}B) {challengeInfo}");
 
         // 3) AUTHENTICATE + pubKeyAuth(client) + clientNonce
         var authenticate = auth.ProcessChallenge(challenge, spn);
@@ -68,7 +73,7 @@ internal sealed class CredSspClient
         var err = ExtractErrorCode(t4);
         if (err != 0)
         {
-            throw new IOException($"CredSSP: server errorCode=0x{err:X8} (check credentials/settings)");
+            throw new IOException($"CredSSP: server errorCode={NtStatus.Describe(err)}");
         }
 
         var serverPub = ExtractPubKeyAuth(t4);

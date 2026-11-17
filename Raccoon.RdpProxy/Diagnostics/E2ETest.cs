@@ -121,7 +121,7 @@ internal static class E2ETest
             return;
         }
 
-        ClientInfoRewriter.TryRewrite(info, "PARSE-ONLY", false, out var addr);
+        ClientInfoRewriter.TryRewrite(info, "PARSE-ONLY", false, null, out var addr);
         onAddr(addr ?? "(none)");
     }
 

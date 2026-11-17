@@ -24,8 +24,8 @@ internal static partial class Log
     [LoggerMessage(Level = LogLevel.Information, Message = "Certificate: subject=[{subject}], notAfter=[{notAfter:yyyy-MM-dd}]")]
     public static partial void InfoCertificate(this ILogger logger, string subject, DateTime notAfter);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Map {listen}:{listenPort} -> {host}:{port} src={source} clientAddr={clientAddress} domain={domain} user={user} allow={allow}")]
-    public static partial void InfoMap(this ILogger logger, string listen, int listenPort, string host, int port, string source, string clientAddress, string domain, string user, string allow);
+    [LoggerMessage(Level = LogLevel.Information, Message = "Map {listen}:{listenPort} -> {host}:{port} src={source} clientAddr={clientAddress} domain={domain} user={user} auth={auth} allow={allow}")]
+    public static partial void InfoMap(this ILogger logger, string listen, int listenPort, string host, int port, string source, string clientAddress, string domain, string user, string auth, string allow);
 
     // Listener / connection
 
@@ -82,6 +82,12 @@ internal static partial class Log
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "[{peer}] Client Info PDU parse failed; forwarding as-is: {error}")]
     public static partial void WarnClientInfoParseFailed(this ILogger logger, string peer, string error);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "[{peer}] auto-logon credentials injected into the Client Info PDU (domain={domain} user={user}).")]
+    public static partial void DebugAutoLogonInjected(this ILogger logger, string peer, string domain, string user);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "[{peer}] AutoLogon is enabled for {dest} but no plaintext Password is configured; credentials are not delivered.")]
+    public static partial void WarnAutoLogonNoPassword(this ILogger logger, string peer, string dest);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "[{peer}] disconnected ({dest}).")]
     public static partial void DebugDisconnected(this ILogger logger, string peer, string dest);
