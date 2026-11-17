@@ -144,13 +144,21 @@ Identity fields other than `ClientAddress` (IP) can also be rewritten. **Two ind
 
 Build scripts (see the header comment in each):
 
-| Script | Output | Requires |
-|---|---|---|
-| `build-release.bat` | `Publish\Windows` (win-x64 NativeAOT) + `Publish\Linux-x64` (self-contained single file) | MSVC toolchain for the AOT link; pass `singlefile` to skip it |
-| `build-linux-singlefile.bat` | `publish/linux-x64` self-contained single file | nothing beyond the SDK |
-| `build-linux-aot.bat` | `publish/aot-linux-x64` NativeAOT | WSL with `dotnet-sdk-11.0`, `clang`, zlib headers |
+Both take the same two options — the target platform, and `singlefile` to switch from NativeAOT to a self-contained single file. One invocation builds one artifact.
 
-NativeAOT cannot cross compile, so a Windows host cannot produce the Linux NativeAOT binary; `build-release.bat` uses the self-contained single-file path for Linux.
+```
+build.bat   <windows|linux> [singlefile]    rem run on Windows
+./build.sh  <windows|linux> [singlefile]    #   run on a Linux host
+```
+
+Output is `Publish\Windows` (win-x64) or `Publish\Linux-x64` (linux-x64), each holding the binary and `appsettings.json`. An invocation only touches its own output directory, so the targets can be built one after the other — on a Windows CI agent that is `build.bat windows` followed by `build.bat linux singlefile`.
+
+NativeAOT cannot cross compile, so each script refuses the NativeAOT build it cannot do; `build.bat linux` and `./build.sh windows` both say to pass `singlefile` or switch hosts.
+
+- NativeAOT on Windows needs the MSVC toolchain: Visual Studio, or the Build Tools with the "Desktop development with C++" workload.
+- NativeAOT on Linux needs `dotnet-sdk-11.0`, `clang` and the zlib headers. The script checks for each and names the package to install.
+- A NativeAOT binary needs the glibc of its build host or newer, so run `build.sh` on a distribution that is the same as — or older than — the relay host. Building on the relay host itself always satisfies that. The self-contained single file does not have this constraint in practice.
+- A script only smoke tests an artifact that runs on its own host, so after copying a Linux artifact built on Windows, run `./Raccoon.RdpProxy --selftest` once on the relay host.
 
 ### Windows service
 ```pwsh
