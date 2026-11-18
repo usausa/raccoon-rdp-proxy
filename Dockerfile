@@ -6,7 +6,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
 # The root MSBuild settings (Directory.Build.props/targets, ruleset, editorconfig) and the project itself.
-COPY Directory.Build.props Directory.Build.targets Analyzers.ruleset .editorconfig ./
+COPY Directory.Build.props Directory.Build.targets .globalconfig .editorconfig ./
 COPY Raccoon.RdpProxy/ ./Raccoon.RdpProxy/
 RUN dotnet publish Raccoon.RdpProxy/Raccoon.RdpProxy.csproj -c Release -r linux-x64 \
     -p:PublishAot=true -p:StripSymbols=true -o /out
